@@ -1,6 +1,4 @@
-from shapefileWeights.AssignWeights import AssignWeights
-from shapefileWeights.ConstructWeights import ConstructWeights
-from shapefileWeights.AssignWeights import write_out_changes
+from weightGIS import ConstructWeights, write_out_changes, AssignWeights
 
 if __name__ == '__main__':
 
@@ -16,7 +14,7 @@ if __name__ == '__main__':
     base_shape = "1951.shp"
     population_shape = "1921.shp"
 
-    # ConstructWeights(project_directory, base_shape, population_shape, weight_index=2).construct_base_weights()
+    ConstructWeights(project_directory, base_shape, population_shape, weight_index=2).construct_base_weights()
 
     # Create Change Log ################################################################################################
     # Now we have our place's over time, we need to write out a file so the user can look up all the changes they need
@@ -25,7 +23,7 @@ if __name__ == '__main__':
     # need to set name_class to be False.
 
     weights_location = r"C:\Users\Samuel\PycharmProjects\ShapefileWeights\ExampleData\BaseWeights\BaseWeights_0.txt"
-    # write_out_changes(weights_location, project_directory, name_class=False)
+    write_out_changes(weights_location, project_directory, name_class=False)
 
     # Weights by Dates #################################################################################################
     # Then we want to take these weights and construct a database that has the weights relative to the dates that places
