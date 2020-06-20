@@ -15,15 +15,13 @@ be used from the terminal.
 python -m pip install weightGIS
 ```
 
-A full worked example via a jupyter notebook and some example data is available within the Example folder of this 
-repository.
+A fully worked example via a jupyter notebook, an example script, and some example data is available within the Example
+folder of this repository that you can download to have a play around with.
 
-<!-- CONTRIBUTIONS -->
 ## Contributions
 Contributions are always welcome, if you want to make a contribution simply make a pull request based on your fork of
 the project or however else you feel able too. 
 
-<!-- License -->
 ## License
 Distributed under the MIT License. See `LICENSE` for more information.
 
