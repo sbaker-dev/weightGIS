@@ -50,26 +50,26 @@ class ConstructWeights:
         :return: The base weights calculated
         :rtype: list
         """
-        base_weights = []
+        base_weights = {f"{rec[self._gid]}_{self.construct_name(rec)}": [] for rec in self.base.polygon_records}
         for c, (shape, record) in enumerate(zip(self.base.polygon_geometry, self.base.polygon_records)):
             print(f"{c+1} / {len(self.base.polygon_records)}")
 
-            match_weights = []
+            match_weights = {file.file_name: [] for file in self.shapefiles}
             for index, match_shape_file in enumerate(self.shapefiles):
                 # Set the weight from overlapping area
                 area_weight = self.polygon_area_weights(shape, match_shape_file)
 
                 # If set, set the weight from underling sub unit population
                 if self.sub_units:
-                    weights = [record[self._gid], self.construct_name(record)] + self.sub_weight(shape, area_weight)
+                    weights = self.sub_weight(shape, area_weight)
                 else:
-                    weights = [record[self._gid], self.construct_name(record)] + [a[:-1] for a in area_weight]
-                match_weights.append(weights)
+                    weights = [area[:-1] for area in area_weight]
+                match_weights[match_shape_file.file_name].append(weights)
                 print(weights)
-            base_weights.append(match_weights)
+
+            base_weights[f"{record[self._gid]}__{self.construct_name(record)}"].append(match_weights)
 
         self.write_out_base_weights(base_weights)
-        return base_weights
 
     def polygon_area_weights(self, current_shape, match_shape_file):
         """
@@ -409,7 +409,7 @@ class ConstructWeights:
         Write out the base weights
 
         :param base_weights: A list of all the base weights
-        :type base_weights: list
+        :type base_weights: dict
 
         :return: Nothing, write out file then stop
         :rtype: None
