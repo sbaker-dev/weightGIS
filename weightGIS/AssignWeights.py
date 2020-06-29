@@ -1,5 +1,6 @@
 import json
-from csvObject import CsvObject, write_csv
+from csvObject.csvObject import CsvObject
+from csvObject.csvWriter import write_csv
 
 
 class AssignWeights:
