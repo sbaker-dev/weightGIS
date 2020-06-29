@@ -50,7 +50,7 @@ class ConstructWeights:
         :return: The base weights calculated
         :rtype: list
         """
-        base_weights = {f"{rec[self._gid]}_{self.construct_name(rec)}": [] for rec in self.base.polygon_records}
+        base_weights = {f"{rec[self._gid]}__{self.construct_name(rec)}": [] for rec in self.base.polygon_records}
         for c, (shape, record) in enumerate(zip(self.base.polygon_geometry, self.base.polygon_records)):
             print(f"{c+1} / {len(self.base.polygon_records)}")
 
