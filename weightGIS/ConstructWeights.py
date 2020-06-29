@@ -462,6 +462,9 @@ class ConstructWeights:
         base_index = [index for index, file in enumerate(shape_file_files) if file == base_name][0]
         shape_files = [ShapeObject(f"{file_path}/{file}") for file in shape_file_files]
 
+        # todo we need to restructure the json write to be more informative to the weights.
+        print(f"The order of the shapefiles is {shape_file_files}")
+
         return ShapeObject(f"{file_path}/{shape_file_files[base_index]}"), base_index, shape_files, subunits
 
     @staticmethod
