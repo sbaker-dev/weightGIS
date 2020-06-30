@@ -8,11 +8,11 @@ class AssignWeights:
         """
         This class contains the methods needed to actually assign the weights to a usable database
         """
-        self.weights_file_name = weights_name
-        self.working_dir = working_dir
-        self.write_name = write_name
-        self.dates_name = dates_name
-        self.population_weights = population_weights
+        self._weights_file_name = weights_name
+        self._working_dir = working_dir
+        self._write_name = write_name
+        self._dates_name = dates_name
+        self._population_weights = population_weights
 
     def assign_weights(self, adjust_dates=False):
         """
@@ -45,7 +45,7 @@ class AssignWeights:
                 weights_list[place_over_time] = {date: {place: weight for place, weight in place_weights}
                                                  for date, place_weights in weights_over_time}
 
-        with open(f"{self.working_dir}/{self.write_name}.txt", "w", encoding="utf-8") as json_saver:
+        with open(f"{self._working_dir}/{self._write_name}.txt", "w", encoding="utf-8") as json_saver:
             json.dump(weights_list, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
 
     def _extract_relevant_changes(self, current_gid, shapefile_years, passer="-"):
@@ -144,7 +144,7 @@ class AssignWeights:
         """
         Load the dates csv file into a csvObject
         """
-        return CsvObject(f"{self.working_dir}/{self.dates_name}")
+        return CsvObject(f"{self._working_dir}/{self._dates_name}")
 
     @property
     def _date_indexes(self):
@@ -162,7 +162,7 @@ class AssignWeights:
         """
         Set the weight key for use in the dictionary
         """
-        if self.population_weights:
+        if self._population_weights:
             return "Population"
         else:
             return "Area"
@@ -236,7 +236,14 @@ class AssignWeights:
         """
         Load in the base weights from a given working directory and file name.
         """
-        with open(f"{self.working_dir}/BaseWeights/{self.weights_file_name}") as j:
+        return self._load_json(f"{self._working_dir}/BaseWeights/{self._weights_file_name}")
+
+    @staticmethod
+    def _load_json(path):
+        """
+        Load a json file at a given path
+        """
+        with open(path) as j:
             return json.load(j)
 
     def _determine_changes(self, weight_group):
@@ -269,4 +276,42 @@ class AssignWeights:
         write_holder = [[weight_group, len(self._determine_changes(weight_group)) - 1]
                         for weight_group in self._weights]
 
-        write_csv(self.working_dir, self.write_name, ["Place", "Expected_Changes"], write_holder)
+        write_csv(self._working_dir, self._write_name, ["Place", "Expected_Changes"], write_holder)
+
+    def _replacement_keys(self, name, fixed):
+        """
+        This Creates a true false list of keys, where True means that the values will be taken from then fixed file and
+        false from the original
+        """
+        original_keys = [int(key) for key in self._weights[name].keys()]
+        key_list = [[key, False] for key in original_keys] + \
+                   [[new, True] for new in [int(key) for key in fixed[name].keys()] if new not in original_keys]
+        key_list.sort(key=lambda x: x[0])
+        return key_list
+
+    def _replacement_values(self, fixed, name, year, new):
+        if new:
+            return fixed[name][str(year)]
+        else:
+            return self._weights[name][str(year)]
+
+    def update_base_weight(self, fixed_json_path, name):
+        """
+        In some situations you may find a complex problem or a mistake and want to update a given place rather than have
+        to - rerun the whole constructor. This allows you to update a given place by its key in the base_weights file
+        you made on all your data, and a new smaller update file. The changes between the update and the master will be
+        logged and then the master file will be updated.
+        """
+        # Load the fix file
+        fixed = self._load_json(fixed_json_path)
+
+        # Create the restructured values for the named place
+        key_list = self._replacement_keys(name, fixed)
+        restructured = {str(year): self._replacement_values(fixed, name, year, new) for year, new in key_list}
+
+        # Write out the new json
+        write_json = self._weights
+        write_json[name] = restructured
+        with open(f"{self._working_dir}/BaseWeights/{self._write_name}", "w", encoding="utf-8") as json_saver:
+            json.dump(write_json, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
+
