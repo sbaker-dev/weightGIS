@@ -14,18 +14,26 @@ class AssignWeights:
         self.dates_name = dates_name
         self.population_weights = population_weights
 
-    def assign_weights(self, shapefile_years):
+    def assign_weights(self, adjust_dates=False):
         """
         This takes all the weights that have occurred, and a file given by the user that contains information on when
         places change in terms of dates, and writes out the weights by the dates they occur.
+
+        :param adjust_dates: if you data is recorded in years, but your dates of change in year-month-day, you can
+            adjust all of your dates by assigning the additional characters here as a string
+        :type adjust_dates: str
 
         :return: Nothing, just write out the file
         :rtype: None
         """
         weights_list = {}
-        for place_over_time in self.weights:
-            # Determine if any changes occur
+
+        for place_over_time in self._weights:
+            # Extract the number of possible changes from the weight data and determine if any changes occur from the
+            # dates data
+            shapefile_years = self._set_shapefile_years(adjust_dates, place_over_time)
             changes = self._extract_relevant_changes(place_over_time.split("__")[0], shapefile_years)
+
             if len(changes) == 0:
                 # If no changes occur, just access the first entry and set our dictionary to these values
                 weights_list[place_over_time] = {min(shapefile_years): {place_over_time: 100.0}}
@@ -55,8 +63,8 @@ class AssignWeights:
         :return: A list of relevant dates of changes in the format of [yyyymmdd, ... yyyymmdd]
         :rtype: list
         """
-        changes = [place[i] for place in self.dates.row_data if str(current_gid) in place for i in range(len(place))
-                   if i in self.date_indexes and place[i] != passer]
+        changes = [place[i] for place in self._dates.row_data if str(current_gid) in place for i in range(len(place))
+                   if i in self._date_indexes and place[i] != passer]
 
         return [int(c) for c in self._invert_dates(changes)
                 if min(shapefile_years) <= int(c) <= max(shapefile_years)]
@@ -104,6 +112,19 @@ class AssignWeights:
 
         return observed_dates
 
+    def _set_shapefile_years(self, adjust_dates, place_over_time):
+        """
+        Set the shapefile dates based on the number of keys that exist for a given place_over_time in self.weights
+
+        :param adjust_dates: If we need to adjust the dates by a set amount, concatenate this to the dates found
+        :param place_over_time: The current place
+        :return: List of dates to search between
+        """
+        if adjust_dates:
+            return [int(date + adjust_dates) for date in list(self._weights[place_over_time].keys())]
+        else:
+            return [int(date) for date in list(self._weights[place_over_time].keys())]
+
     @staticmethod
     def _invert_dates(dates_list, delimiter="/"):
         """
@@ -119,14 +140,14 @@ class AssignWeights:
         return [date.split(delimiter)[2] + date.split(delimiter)[1] + date.split(delimiter)[0] for date in dates_list]
 
     @property
-    def dates(self):
+    def _dates(self):
         """
         Load the dates csv file into a csvObject
         """
         return CsvObject(f"{self.working_dir}/{self.dates_name}")
 
     @property
-    def date_indexes(self):
+    def _date_indexes(self):
         """
         This just isolates the columns within the dates csv that have dates within them and returns a list of indexes
         where each index is a respective column.
@@ -134,10 +155,10 @@ class AssignWeights:
         :return: List of indexes, where each index is a column to load
         :rtype: list
         """
-        return [index for index, head in enumerate(self.dates.headers) if "Changes" in head]
+        return [index for index, head in enumerate(self._dates.headers) if "Changes" in head]
 
     @property
-    def weight_key(self):
+    def _weight_key(self):
         """
         Set the weight key for use in the dictionary
         """
@@ -200,18 +221,18 @@ class AssignWeights:
         """
 
         weights_by_date = []
-        for index, values in enumerate(self.weights[place_over_time].values()):
+        for index, values in enumerate(self._weights[place_over_time].values()):
             if index == 0:
-                weights_by_date.append([min(shapefile_years)] + [[[v, values[v][self.weight_key]] for v in values]])
+                weights_by_date.append([min(shapefile_years)] + [[[v, values[v][self._weight_key]] for v in values]])
             else:
                 for date in dates_observed:
                     if shapefile_years[index - 1] < date <= shapefile_years[index]:
-                        weights_by_date.append([date] + [[[v, values[v][self.weight_key]] for v in values]])
+                        weights_by_date.append([date] + [[[v, values[v][self._weight_key]] for v in values]])
 
         return weights_by_date
 
     @property
-    def weights(self):
+    def _weights(self):
         """
         Load in the base weights from a given working directory and file name.
         """
@@ -227,10 +248,12 @@ class AssignWeights:
         :return: List of all the non duplicated changes
         """
         cleaned_of_duplication = []
-        for value in self.weights[weight_group].values():
+        for value in self._weights[weight_group].values():
             non_duplication = [[k, v["Area"], v["Population"]] for k, v in zip(value.keys(), value.values())]
+
             if non_duplication not in cleaned_of_duplication:
                 cleaned_of_duplication.append(non_duplication)
+
         return cleaned_of_duplication
 
     def write_out_changes(self):
@@ -243,5 +266,7 @@ class AssignWeights:
         :return: Nothing, just write out the csv file with the number of expected changes and support search terms
         :rtype: None
         """
-        write_holder = [[weight_group, len(self._determine_changes(weight_group)) - 1] for weight_group in self.weights]
+        write_holder = [[weight_group, len(self._determine_changes(weight_group)) - 1]
+                        for weight_group in self._weights]
+
         write_csv(self.working_dir, self.write_name, ["Place", "Expected_Changes"], write_holder)
