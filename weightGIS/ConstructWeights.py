@@ -5,6 +5,7 @@ from shapely.ops import split as shp_split
 from shapely.geometry import LineString, Polygon, MultiPolygon, GeometryCollection
 from pathlib import Path
 import json
+import re
 
 
 class ConstructWeights:
@@ -54,8 +55,9 @@ class ConstructWeights:
         for c, (shape, record) in enumerate(zip(self.base.polygon_geometry, self.base.polygon_records)):
             print(f"{c+1} / {len(self.base.polygon_records)}")
 
-            match_weights = {file.file_name: [] for file in self.shapefiles}
+            match_weights = {file: [] for file in [re.sub(r'\D', "", file.file_name) for file in self.shapefiles]}
             for index, match_shape_file in enumerate(self.shapefiles):
+
                 # Set the weight from overlapping area
                 area_weight = self.polygon_area_weights(shape, match_shape_file)
 
@@ -64,10 +66,9 @@ class ConstructWeights:
                     weights = self.sub_weight(shape, area_weight)
                 else:
                     weights = [area[:-1] for area in area_weight]
-                match_weights[match_shape_file.file_name].append(weights)
-                print(weights)
+                match_weights[re.sub(r'\D', "", match_shape_file.file_name)] = weights
 
-            base_weights[f"{record[self._gid]}__{self.construct_name(record)}"].append(match_weights)
+            base_weights[f"{record[self._gid]}__{self.construct_name(record)}"] = self._format_weights(match_weights)
 
         self.write_out_base_weights(base_weights)
 
@@ -462,9 +463,6 @@ class ConstructWeights:
         base_index = [index for index, file in enumerate(shape_file_files) if file == base_name][0]
         shape_files = [ShapeObject(f"{file_path}/{file}") for file in shape_file_files]
 
-        # todo we need to restructure the json write to be more informative to the weights.
-        print(f"The order of the shapefiles is {shape_file_files}")
-
         return ShapeObject(f"{file_path}/{shape_file_files[base_index]}"), base_index, shape_files, subunits
 
     @staticmethod
@@ -480,3 +478,22 @@ class ConstructWeights:
         """
 
         return [item for sublist in list_of_lists for item in sublist]
+
+    @staticmethod
+    def _format_weights(weights):
+        """
+        Now we have lists of data, but we want to structure these lists into dictionarys so we can parse the information
+        quickly and also have the data have a greater level of human readability
+        :param weights:
+        :return:
+        """
+        formatted = {key: {} for key in weights.keys()}
+
+        for key, data_in_time in zip(weights.keys(), weights.values()):
+            location_data = {}
+            for gid, place, area, population in data_in_time:
+                location_data[f"{gid}__{place}"] = {"Area": area, "Population": population}
+
+            formatted[key] = location_data
+
+        return formatted
