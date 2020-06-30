@@ -1,4 +1,4 @@
-GID,Place_Name,Expected Changes
-1,Ecanlor,1
-2,Nirghol,0
-3,Danlhigh,1
+Place,Expected_Changes
+1__Ecanlor,1
+2__Nirghol,0
+3__Danlhigh,1
