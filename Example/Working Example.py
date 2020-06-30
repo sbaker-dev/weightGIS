@@ -14,7 +14,7 @@ if __name__ == '__main__':
     base_shape = "1951.shp"
     population_shape = "1921.shp"
 
-    # ConstructWeights(project_directory, base_shape, population_shape, weight_index=2).construct_base_weights()
+    ConstructWeights(project_directory, base_shape, population_shape, weight_index=2).construct_base_weights()
 
     # Create Change Log ################################################################################################
     # Now we have our place's over time, we need to write out a file so the user can look up all the changes they need
@@ -27,10 +27,10 @@ if __name__ == '__main__':
     # Weights by Dates #################################################################################################
     # Then we want to take these weights and construct a database that has the weights relative to the dates that places
     # change over time in. First we need to load the weights be generated in the ConstructWeights. Then load in the file
-    # you have create with dates about these places, in this case mine is in dates_directory. Then you need to provide a
-    # list of dates that equal the number shapefiles in yyyymmdd format so we can look at changes occurring between
-    # them. Finally provide a write directory and name, and then your finished!
+    # you have create with dates about these places, in this case mine is in dates_directory. It may be the case that
+    # you only observe the dates of a census in a general year format, but the changes you have are more specific in
+    # terms of year-month-day. If this is the case, you need to adjust the year format by assigning a month and day to
+    # the assign_weights call method so we can look at changes occurring between them. Finally provide a write directory
+    # and name, and then your finished!
 
-    # dates_file = r"C:\Users\Samuel\PycharmProjects\weightGIS\Example\ExampleData\Weight_Dates.csv"
-    shapefile_years = [19310401, 19510401]
-    AssignWeights("BaseWeights_0.txt", project_directory, "1951_weights_by_dates").assign_weights(shapefile_years)
+    AssignWeights("BaseWeights_0.txt", project_directory, "1951_weights_by_dates").assign_weights("0401")
