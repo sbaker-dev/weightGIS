@@ -33,4 +33,4 @@ if __name__ == '__main__':
     # the assign_weights call method so we can look at changes occurring between them. Finally provide a write directory
     # and name, and then your finished!
 
-    AssignWeights("BaseWeights_0.txt", project_directory, "1951_weights_by_dates").assign_weights("0401")
+    AssignWeights("BaseWeights_0.txt", project_directory, "1951_weights_by_dates").assign_weights_dates("0401")

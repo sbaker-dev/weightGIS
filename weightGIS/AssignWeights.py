@@ -14,7 +14,7 @@ class AssignWeights:
         self._dates_name = dates_name
         self._population_weights = population_weights
 
-    def assign_weights(self, adjust_dates=False):
+    def assign_weights_dates(self, adjust_dates=False):
         """
         This takes all the weights that have occurred, and a file given by the user that contains information on when
         places change in terms of dates, and writes out the weights by the dates they occur.
@@ -33,6 +33,8 @@ class AssignWeights:
             # dates data
             shapefile_years = self._set_shapefile_years(adjust_dates, place_over_time)
             changes = self._extract_relevant_changes(place_over_time.split("__")[0], shapefile_years)
+
+            print(changes)
 
             if len(changes) == 0:
                 # If no changes occur, just access the first entry and set our dictionary to these values
@@ -219,7 +221,7 @@ class AssignWeights:
              area_weight, pop_weight]]
         :rtype: list
         """
-
+        print(dates_observed)
         weights_by_date = []
         for index, values in enumerate(self._weights[place_over_time].values()):
             if index == 0:
