@@ -18,8 +18,8 @@ class WeightExternal:
             dates_range = [date for date in self._weights_dates[place_name].keys()]
 
             # If there is only one date, we have no weighting to do as the place remains unchanged from its first state
-            if (len(dates_range) == 1) and self.check_database(place_name):
-                self._master[place_name] = self.check_database(place_name)
+            if (len(dates_range) == 1) and self.extract_data(place_name):
+                self._master[place_name] = self.extract_data(place_name)
 
             # Otherwise we need to weight the data, and potentially consider non-common dates across places
             else:
@@ -43,6 +43,8 @@ class WeightExternal:
             else:
                 self._weight_multiple(place_name, date, place_dict, date_min, date_max)
 
+        print(place_dict)
+
 
     def _weight_single(self, place_name, date, place_dict, date_min, date_max):
         """
@@ -54,7 +56,7 @@ class WeightExternal:
 
         # If the database contains information about this place, extract that information and set it against the
         # current place
-        if self.check_database(place):
+        if self.extract_data(place):
             attr_values = [self.weight_attribute(attr, place, weight, date_min, date_max) for attr in self.attributes]
 
             for attr, dates, values in attr_values:
@@ -69,19 +71,21 @@ class WeightExternal:
         places, weights = self._extract_weight_place(self._weights_dates[place_name][date])
 
         # Determine if we have data for each place
-        all_valid = [self.check_database(place) for place in places if self.check_database(place)]
+        all_valid = [self.extract_data(place) for place in places if self.extract_data(place)]
 
         # If we have data for both places
         if len(all_valid) == len(places):
-            print("All Valid")
+
             for attr in self.attributes:
-                dates = self._extract_usable_dates(attr, date_min, date_max, places, weights)
-                print(dates)
+                dates_list = self._extract_usable_dates(attr, date_min, date_max, places, weights)
+                weight_values = [self._weight_summation(date, attr, places, weights) for date in dates_list]
+
+                place_dict[place_name][attr]["Dates"].append(dates_list)
+                place_dict[place_name][attr]["Values"].append(weight_values)
 
         else:
             print(f"Warning only found data for {len(all_valid)} of the expected {len(places)} places for "
                   f"{[self._search_name(place) for place in places]}")
-
 
     def _extract_usable_dates(self, attr, date_min, date_max, places, weights):
 
@@ -127,7 +131,7 @@ class WeightExternal:
         Return the attribute key, the dates of the weight values as a list, and the weighted value as a list
         """
         attr_data = self.database[self._search_name(place)][attr]
-        values = [self.construct_weight(value, weight) for date, value in zip(attr_data["Dates"], attr_data["Values"])
+        values = [self.calculate_weight(value, weight) for date, value in zip(attr_data["Dates"], attr_data["Values"])
                   if date_min <= int(date) < date_max]
         dates = [date for date in attr_data["Dates"] if date_min <= int(date) < date_max]
 
@@ -140,7 +144,7 @@ class WeightExternal:
         else:
             sys.exit("No valid return")
 
-    def check_database(self, place):
+    def extract_data(self, place):
         """
         Check to see if the database contains a given place
         """
@@ -177,12 +181,30 @@ class WeightExternal:
             return int(date), int(self._user_end_date)
 
     @staticmethod
-    def construct_weight(value, weight):
+    def calculate_weight(value, weight):
         """
         A weight value is equal to the value * (percentage weight / 100)
         """
 
         return value * (weight / 100)
+
+    def _date_index(self, date, attr, place):
+        """
+        Use the date to extract the index position that date is in this places attribute, and the use that index to
+        parse the value that is associated with it from values
+
+        Note
+        --------------
+        The original data set was set as Dates list [] value_list [] but wouldn't it make more sense to have date: v?
+
+        """
+        return self.extract_data(place)[attr]["Values"][self.extract_data(place)[attr]["Dates"].index(date)]
+
+    def _weight_summation(self, date, attr, places, weights):
+        """
+        Create a summed value from all the weights of the places
+        """
+        return sum([self.calculate_weight(self._date_index(date, attr, p), w) for p, w in zip(places, weights)])
 
     @staticmethod
     def flatten_list(list_of_lists):
