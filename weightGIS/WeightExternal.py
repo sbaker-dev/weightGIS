@@ -14,6 +14,7 @@ class WeightExternal:
     def weight_external(self):
         for place_name in self._weights_dates:
             print(place_name)
+
             # See how many changes exist for this place
             dates_range = [date for date in self._weights_dates[place_name].keys()]
 
@@ -24,7 +25,6 @@ class WeightExternal:
             # Otherwise we need to weight the data, and potentially consider non-common dates across places
             else:
                 self._master[place_name] = self._weight_place(place_name, dates_range)
-                break
 
     def _weight_place(self, place_name, dates_range):
         place_dict = {place_name: {attr: {"Dates": [], "Values": []} for attr in self.attributes}}
@@ -43,8 +43,12 @@ class WeightExternal:
             else:
                 self._weight_multiple(place_name, date, place_dict, date_min, date_max)
 
-        print(place_dict)
+        # Flatten the lists
+        for attr in place_dict[place_name]:
+            place_dict[place_name][attr]["Dates"] = self.flatten_list(place_dict[place_name][attr]["Dates"])
+            place_dict[place_name][attr]["Values"] = self.flatten_list(place_dict[place_name][attr]["Values"])
 
+        return place_dict
 
     def _weight_single(self, place_name, date, place_dict, date_min, date_max):
         """
@@ -100,7 +104,8 @@ class WeightExternal:
         non_common_dates = [date for date in dates_dict if dates_dict[date] != len(places)]
         if len(non_common_dates) > 0:
             # Write out this information for users so they can fix their raw data
-            self._non_common.append([date] + places for date in non_common_dates)
+            self._non_common.append([date, attr] + places for date in non_common_dates)
+            print(f"Warning: Non Common dates found for {attr} in {places}")
 
         # Return common dates list
         return sorted([date for date in dates_dict if date not in non_common_dates])
@@ -129,20 +134,39 @@ class WeightExternal:
         """
         For a given attribute, extract the attribute values and if they are between the min and max dates weight them.
         Return the attribute key, the dates of the weight values as a list, and the weighted value as a list
-        """
-        attr_data = self.database[self._search_name(place)][attr]
-        values = [self.calculate_weight(value, weight) for date, value in zip(attr_data["Dates"], attr_data["Values"])
-                  if date_min <= int(date) < date_max]
-        dates = [date for date in attr_data["Dates"] if date_min <= int(date) < date_max]
 
-        if not dates_return and not value_return:
-            return attr, dates, values
-        elif dates_return:
-            return dates
-        elif value_return:
-            return values
-        else:
-            sys.exit("No valid return")
+        NOTE
+        ---------
+
+        This is horrible, and needs refactoring
+        """
+        try:
+            attr_data = self.database[self._search_name(place)][attr]
+            values = [self.calculate_weight(value, weight) for date, value in zip(attr_data["Dates"], attr_data["Values"])
+                      if date_min <= int(date) < date_max]
+            dates = [date for date in attr_data["Dates"] if date_min <= int(date) < date_max]
+
+            if not dates_return and not value_return:
+                return attr, dates, values
+            elif dates_return:
+                return dates
+            elif value_return:
+                return values
+            else:
+                sys.exit("No valid return")
+
+        except KeyError:
+            values = []
+            dates = []
+
+            if not dates_return and not value_return:
+                return attr, dates, values
+            elif dates_return:
+                return dates
+            elif value_return:
+                return values
+            else:
+                sys.exit("No valid return")
 
     def extract_data(self, place):
         """
@@ -185,8 +209,10 @@ class WeightExternal:
         """
         A weight value is equal to the value * (percentage weight / 100)
         """
-
-        return value * (weight / 100)
+        if isinstance(value, str):
+            return value
+        else:
+            return value * (weight / 100)
 
     def _date_index(self, date, attr, place):
         """
@@ -204,7 +230,12 @@ class WeightExternal:
         """
         Create a summed value from all the weights of the places
         """
-        return sum([self.calculate_weight(self._date_index(date, attr, p), w) for p, w in zip(places, weights)])
+        values = [self.calculate_weight(self._date_index(date, attr, p), w) for p, w in zip(places, weights)]
+
+        if all(isinstance(v, (int, float)) for v in values):
+            return sum(values)
+        else:
+            return "NA"
 
     @staticmethod
     def flatten_list(list_of_lists):
