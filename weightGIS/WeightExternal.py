@@ -1,5 +1,6 @@
 import json
 import sys
+from collections import Counter
 
 
 class WeightExternal:
@@ -8,7 +9,7 @@ class WeightExternal:
         self._weights_dates = self._load_json(weights_path)
         self._user_end_date = date_max
         self._master = {}
-
+        self._non_common = []
 
     def weight_external(self):
         for place_name in self._weights_dates:
@@ -17,75 +18,33 @@ class WeightExternal:
             dates_range = [date for date in self._weights_dates[place_name].keys()]
 
             # If there is only one date, we have no weighting to do as the place remains unchanged from its first state
-            if (len(dates_range) == 1) and self.check_database(self._search_name(place_name)):
-                self._master[place_name] = self.check_database(self._search_name(place_name))
+            if (len(dates_range) == 1) and self.check_database(place_name):
+                self._master[place_name] = self.check_database(place_name)
 
-            # # Otherwise we need to weight the data, and potentially consider non-common dates across places
-            # else:
-            #     place_dict = {place_name: {attr: {"Dates": [], "Values": []} for attr in attributes}}
-            #     for index, date in enumerate(dates_range, 1):
-            #         date_min, date_max = self._set_min_max_date(index, date, dates_range, user_date_max)
-            #
-            #         # If there is only one place, then we just need to weight the values relevant to the dates
-            #         if len(self._weights_dates[place_name][date]) == 1:
-            #             self._single_weight(place_name, date, database, search_key, date_min, date_max, attributes,
-            #                                 place_dict)
-            #         # Otherwise we have to make sure all places, have all dates.
-            #         else:
-            #             places, weights = self._extract_weight_place(self._weights_dates[place_name][date])
-            #
-            #             print(date_min, date_max)
-            #             print(self._weights_dates[place_name][date])
-            #             print(places, weights)
-            #             all_valid = [self.check_database(database, self._search_name(search_key, place)) for place in places
-            #                          if self.check_database(database, self._search_name(search_key, place))]
-            #
-            #             # If we have data for both places
-            #             if len(all_valid) == len(places):
-            #                 for attr in attributes:
-            #                     print(attr)
-            #                     dates_list = [self.weight_attribute(attr, database, search_key, place, weight, date_min, date_max, dates_return=True)
-            #                                   for place, weight in zip(places, weights)]
-            #
-            #                     value_list = [self.weight_attribute(attr, database, search_key, place, weight, date_min, date_max, value_return=True)
-            #                                   for place, weight in zip(places, weights)]
-            #
-            #                     common_dates_dict = (Counter(self.flatten_list(dates_list)))
-            #                     non_common_dates = [date for date in common_dates_dict if
-            #                                         common_dates_dict[date] != len(places)]
-            #
-            #
-            #
-            #                     if len(non_common_dates) > 0:
-            #                         print("Non Common Dates that need writing out here")
-            #                     # todo if there are non common dates then we need to isolate dates that are not common
-            #                     #  from the list.
-            #
-            #                     else:
-            #                         # todo otherwise we need to use the common dates dict to extract a date. We probably
-            #                         #  want to extract this from the database as that is a dict so we don't reconstruct
-            #                         #  it for the sack of it
-            #
-            #                         for d, v in dates_list, value_list:
-            #                             print(d)
-            #                             print(v)
-            #
-            #                         break
-            #
-            #
-            #
-            #
-            #
-            #
-            #
-            #
-            #
-            #
-            #
-            #
-            #     break
+            # Otherwise we need to weight the data, and potentially consider non-common dates across places
+            else:
+                self._master[place_name] = self._weight_place(place_name, dates_range)
+                break
 
-    def _single_weight(self, place_name, date, database, search_key, date_min, date_max, attributes, place_dict):
+    def _weight_place(self, place_name, dates_range):
+        place_dict = {place_name: {attr: {"Dates": [], "Values": []} for attr in self.attributes}}
+
+        # For each change that occurs in this place
+        for index, date in enumerate(dates_range, 1):
+
+            # Set the date range for this change
+            date_min, date_max = self._set_min_max_date(index, date, dates_range)
+
+            # If there is only one place for this change, then we just need to weight the values relevant to the dates
+            if len(self._weights_dates[place_name][date]) == 1:
+                self._weight_single(place_name, date, place_dict, date_min, date_max)
+
+            # Otherwise we have to make sure all places, have all dates, and sum weighted values appropriately .
+            else:
+                self._weight_multiple(place_name, date, place_dict, date_min, date_max)
+
+
+    def _weight_single(self, place_name, date, place_dict, date_min, date_max):
         """
         If there is only a single place, then we don't need to worry about non-common dates across weight places and we
         can just weight the values of each attribute and append them to our place dict as long as the database contains
@@ -95,13 +54,52 @@ class WeightExternal:
 
         # If the database contains information about this place, extract that information and set it against the
         # current place
-        if database[self._search_name(search_key, place)]:
-            attribute_values = [self.weight_attribute(attr, database, search_key, place, weight, date_min, date_max)
-                                for attr in attributes]
+        if self.check_database(place):
+            attr_values = [self.weight_attribute(attr, place, weight, date_min, date_max) for attr in self.attributes]
 
-            for attr, dates, values in attribute_values:
+            for attr, dates, values in attr_values:
                 place_dict[place_name][attr]["Dates"].append(dates)
                 place_dict[place_name][attr]["Values"].append(values)
+        else:
+            print(f"Warning: No data found for {self._search_name(place)}")
+
+    def _weight_multiple(self, place_name, date, place_dict, date_min, date_max):
+
+        # Extract the places and weights involved in this change
+        places, weights = self._extract_weight_place(self._weights_dates[place_name][date])
+
+        # Determine if we have data for each place
+        all_valid = [self.check_database(place) for place in places if self.check_database(place)]
+
+        # If we have data for both places
+        if len(all_valid) == len(places):
+            print("All Valid")
+            for attr in self.attributes:
+                dates = self._extract_usable_dates(attr, date_min, date_max, places, weights)
+                print(dates)
+
+        else:
+            print(f"Warning only found data for {len(all_valid)} of the expected {len(places)} places for "
+                  f"{[self._search_name(place) for place in places]}")
+
+
+    def _extract_usable_dates(self, attr, date_min, date_max, places, weights):
+
+        dates_list = [self.weight_attribute(attr, place, weight, date_min, date_max, dates_return=True)
+                      for place, weight in zip(places, weights)]
+
+        # Count each occurrence of a date to insure we have the same number in all places
+        dates_dict = Counter(self.flatten_list(dates_list))
+
+        # If we have any non_common dates, we can't use this date for weighting as we won't have data in all of the
+        # places involved in the weight
+        non_common_dates = [date for date in dates_dict if dates_dict[date] != len(places)]
+        if len(non_common_dates) > 0:
+            # Write out this information for users so they can fix their raw data
+            self._non_common.append([date] + places for date in non_common_dates)
+
+        # Return common dates list
+        return sorted([date for date in dates_dict if date not in non_common_dates])
 
     def _search_name(self, place_name):
         """
@@ -123,12 +121,12 @@ class WeightExternal:
         else:
             return weight_places, weight_list
 
-    def weight_attribute(self, attr, database, search_key, place, weight, date_min, date_max, dates_return=False, value_return=False):
+    def weight_attribute(self, attr, place, weight, date_min, date_max, dates_return=False, value_return=False):
         """
         For a given attribute, extract the attribute values and if they are between the min and max dates weight them.
         Return the attribute key, the dates of the weight values as a list, and the weighted value as a list
         """
-        attr_data = database[self._search_name(search_key, place)][attr]
+        attr_data = self.database[self._search_name(place)][attr]
         values = [self.construct_weight(value, weight) for date, value in zip(attr_data["Dates"], attr_data["Values"])
                   if date_min <= int(date) < date_max]
         dates = [date for date in attr_data["Dates"] if date_min <= int(date) < date_max]
@@ -147,7 +145,7 @@ class WeightExternal:
         Check to see if the database contains a given place
         """
         try:
-            return self.database[place]
+            return self.database[self._search_name(place)]
         except KeyError:
             return None
 
@@ -168,8 +166,7 @@ class WeightExternal:
 
         return data, search_key, attributes
 
-    @staticmethod
-    def _set_min_max_date(index, date, dates_range, max_date):
+    def _set_min_max_date(self, index, date, dates_range):
         """
         If we have reached the last date provided, then set max date to be the max provided by the user, otherwise
         create a time period from the current date and the next date
@@ -177,7 +174,7 @@ class WeightExternal:
         if index < len(dates_range):
             return int(date), int(dates_range[index])
         else:
-            return int(date), int(max_date)
+            return int(date), int(self._user_end_date)
 
     @staticmethod
     def construct_weight(value, weight):
