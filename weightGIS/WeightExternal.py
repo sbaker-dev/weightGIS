@@ -1,6 +1,7 @@
 import json
 import sys
 from collections import Counter
+from csvObject import write_csv
 
 
 class WeightExternal:
@@ -11,7 +12,7 @@ class WeightExternal:
         self._master = {}
         self._non_common = []
 
-    def weight_external(self):
+    def weight_external(self, write_path):
         for place_name in self._weights_dates:
             print(place_name)
 
@@ -25,6 +26,11 @@ class WeightExternal:
             # Otherwise we need to weight the data, and potentially consider non-common dates across places
             else:
                 self._master[place_name] = self._weight_place(place_name, dates_range)
+
+        # Write out the weighted data
+        self._write_json(write_path, self._master)
+        if len(self._non_common) > 0:
+            write_csv(write_path, "NonCommonDates", [], self._non_common)
 
     def _weight_place(self, place_name, dates_range):
         place_dict = {place_name: {attr: {"Dates": [], "Values": []} for attr in self.attributes}}
@@ -104,7 +110,7 @@ class WeightExternal:
         non_common_dates = [date for date in dates_dict if dates_dict[date] != len(places)]
         if len(non_common_dates) > 0:
             # Write out this information for users so they can fix their raw data
-            self._non_common.append([date, attr] + places for date in non_common_dates)
+            self._non_common.append([[date, attr] + places for date in non_common_dates])
             print(f"Warning: Non Common dates found for {attr} in {places}")
 
         # Return common dates list
@@ -141,10 +147,10 @@ class WeightExternal:
         This is horrible, and needs refactoring
         """
         try:
-            attr_data = self.database[self._search_name(place)][attr]
-            values = [self.calculate_weight(value, weight) for date, value in zip(attr_data["Dates"], attr_data["Values"])
+            data = self.database[self._search_name(place)][attr]
+            values = [self.calculate_weight(value, weight) for date, value in zip(data["Dates"], data["Values"])
                       if date_min <= int(date) < date_max]
-            dates = [date for date in attr_data["Dates"] if date_min <= int(date) < date_max]
+            dates = [date for date in data["Dates"] if date_min <= int(date) < date_max]
 
             if not dates_return and not value_return:
                 return attr, dates, values
@@ -258,3 +264,11 @@ class WeightExternal:
         """
         with open(path) as j:
             return json.load(j)
+
+    @staticmethod
+    def _write_json(write_path, write_data):
+        """
+        Write the Json data
+        """
+        with open(f"{write_path}/weighted.txt", "w", encoding="utf-8") as json_saver:
+            json.dump(write_data, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
