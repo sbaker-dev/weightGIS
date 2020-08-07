@@ -479,21 +479,21 @@ class ConstructWeights:
 
         return [item for sublist in list_of_lists for item in sublist]
 
-    @staticmethod
-    def _format_weights(weights):
+    def _set_format(self, weights):
+        """
+        If we only have area weights, then we won't have the same number of data points and will lead to an unexpected
+        unpacking error. So we use the existance of sub units to determine the data that is written out
+        """
+
+        if self.sub_units:
+            return {f"{gid}__{place}": {"Area": area, "Population": population}
+                    for gid, place, area, population in weights}
+        else:
+            return {f"{gid}__{place}": {"Area": area} for gid, place, area in weights}
+
+    def _format_weights(self, weights):
         """
         Now we have lists of data, but we want to structure these lists into dictionarys so we can parse the information
         quickly and also have the data have a greater level of human readability
-        :param weights:
-        :return:
         """
-        formatted = {key: {} for key in weights.keys()}
-
-        for key, data_in_time in zip(weights.keys(), weights.values()):
-            location_data = {}
-            for gid, place, area, population in data_in_time:
-                location_data[f"{gid}__{place}"] = {"Area": area, "Population": population}
-
-            formatted[key] = location_data
-
-        return formatted
+        return {key: self._set_format(place_weights) for key, place_weights in zip(weights.keys(), weights.values())}
