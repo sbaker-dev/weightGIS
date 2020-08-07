@@ -12,7 +12,11 @@ class WeightExternal:
         self._master = {}
         self._non_common = []
 
-    def weight_external(self, write_path):
+    def weight_external(self, write_path, write_name="Weighted"):
+        """
+        This will use all the places and weights from the weights be dates file, and use it to weight an external data
+        source.
+        """
         for place_name in self._weights_dates:
             print(place_name)
 
@@ -28,12 +32,20 @@ class WeightExternal:
                 self._master[place_name] = self._weight_place(place_name, dates_range)
 
         # Write out the weighted data
-        self._write_json(write_path, self._master)
+        self._write_json(f"{write_path}/{write_name}", self._master)
         if len(self._non_common) > 0:
             write_csv(write_path, "NonCommonDates", [], self._non_common)
 
     def _weight_place(self, place_name, dates_range):
-        place_dict = {place_name: {attr: {"Dates": [], "Values": []} for attr in self.attributes}}
+        """
+        If a place changes over time, then we need to weight data based on those changes. If there is only a single
+        place, for example a place used to be 50% larger so in a previous change it represents 50% of the values, then
+        we just need to weight all the values by that weight. If the place used to made up of multiple places, then we
+        need to weight each place by that weight, and then sum the values. The later has more problems associated with
+        it, as you need data in ALL of the places otherwise you end up with uncommon dates where you cannot weight a
+        certain district because you don't have all the data you need.
+        """
+        place_dict = {attr: {"Dates": [], "Values": []} for attr in self.attributes}
 
         # For each change that occurs in this place
         for index, date in enumerate(dates_range, 1):
@@ -50,9 +62,9 @@ class WeightExternal:
                 self._weight_multiple(place_name, date, place_dict, date_min, date_max)
 
         # Flatten the lists
-        for attr in place_dict[place_name]:
-            place_dict[place_name][attr]["Dates"] = self.flatten_list(place_dict[place_name][attr]["Dates"])
-            place_dict[place_name][attr]["Values"] = self.flatten_list(place_dict[place_name][attr]["Values"])
+        for attr in place_dict:
+            place_dict[attr]["Dates"] = self.flatten_list(place_dict[attr]["Dates"])
+            place_dict[attr]["Values"] = self.flatten_list(place_dict[attr]["Values"])
 
         return place_dict
 
@@ -70,12 +82,17 @@ class WeightExternal:
             attr_values = [self.weight_attribute(attr, place, weight, date_min, date_max) for attr in self.attributes]
 
             for attr, dates, values in attr_values:
-                place_dict[place_name][attr]["Dates"].append(dates)
-                place_dict[place_name][attr]["Values"].append(values)
+                place_dict[attr]["Dates"].append(dates)
+                place_dict[attr]["Values"].append(values)
         else:
             print(f"Warning: No data found for {self._search_name(place)}")
 
     def _weight_multiple(self, place_name, date, place_dict, date_min, date_max):
+        """
+        If there are multiple places in this change peroid, then we need to extract the data and check that we have the
+        same dates for each place in this change. If we do we can then just sum the weighted values to create a weighted
+        value set that can be appended for each date.
+        """
 
         # Extract the places and weights involved in this change
         places, weights = self._extract_weight_place(self._weights_dates[place_name][date])
@@ -90,14 +107,22 @@ class WeightExternal:
                 dates_list = self._extract_usable_dates(attr, date_min, date_max, places, weights)
                 weight_values = [self._weight_summation(date, attr, places, weights) for date in dates_list]
 
-                place_dict[place_name][attr]["Dates"].append(dates_list)
-                place_dict[place_name][attr]["Values"].append(weight_values)
+                place_dict[attr]["Dates"].append(dates_list)
+                place_dict[attr]["Values"].append(weight_values)
 
         else:
             print(f"Warning only found data for {len(all_valid)} of the expected {len(places)} places for "
                   f"{[self._search_name(place) for place in places]}")
 
     def _extract_usable_dates(self, attr, date_min, date_max, places, weights):
+        """
+        If we have multiple places, not all places may have the same dates. We cannot create a weighted value from
+        multiple places if some of those places are missing. So in these cases, nothing is written to the dataset, and
+        a line explaining what was missing is written out to a csv file.
+
+        If we do have common dates dates for a given place, then we return these dates which will be indexed to extract
+        the values associated with them
+        """
 
         dates_list = [self.weight_attribute(attr, place, weight, date_min, date_max, dates_return=True)
                       for place, weight in zip(places, weights)]
@@ -110,7 +135,7 @@ class WeightExternal:
         non_common_dates = [date for date in dates_dict if dates_dict[date] != len(places)]
         if len(non_common_dates) > 0:
             # Write out this information for users so they can fix their raw data
-            self._non_common.append([[date, attr] + places for date in non_common_dates])
+            self._non_common.append(self.flatten_list([[date, attr] + places for date in non_common_dates]))
             print(f"Warning: Non Common dates found for {attr} in {places}")
 
         # Return common dates list
@@ -270,5 +295,5 @@ class WeightExternal:
         """
         Write the Json data
         """
-        with open(f"{write_path}/weighted.txt", "w", encoding="utf-8") as json_saver:
+        with open(f"{write_path}.txt", "w", encoding="utf-8") as json_saver:
             json.dump(write_data, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
