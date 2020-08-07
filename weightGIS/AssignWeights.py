@@ -10,11 +10,11 @@ class AssignWeights:
         """
         self._working_dir = working_dir
         self._write_name = write_name
+        self.population_weights = population_weights
 
         self._weights = self._load_weights(weights_name)
-        self._weight_key = self._set_weight_key(population_weights)
-        self._dates = self._load_dates(dates_name)
-        self._date_indexes = self._set_date_indexes()
+        self._weight_key = self._set_weight_key()
+        self._dates, self._date_indexes = self._load_dates(dates_name)
 
     def assign_weights_dates(self, adjust_dates=False):
         """
@@ -143,26 +143,20 @@ class AssignWeights:
 
     def _load_dates(self, dates_name):
         """
-        Load the dates csv file into a csvObject
+        Load the dates csv file into a csvObject if it exists and set the indexes of the headers that have the dates
+        within them,, otherwise return nothing.
         """
-        return CsvObject(f"{self._working_dir}/{dates_name}")
+        try:
+            dates = CsvObject(f"{self._working_dir}/{dates_name}")
+            return dates, [index for index, head in enumerate(dates.headers) if "Changes" in head]
+        except FileNotFoundError:
+            return None, None
 
-    def _set_date_indexes(self):
-        """
-        This just isolates the columns within the dates csv that have dates within them and returns a list of indexes
-        where each index is a respective column.
-
-        :return: List of indexes, where each index is a column to load
-        :rtype: list
-        """
-        return [index for index, head in enumerate(self._dates.headers) if "Changes" in head]
-
-    @staticmethod
-    def _set_weight_key(population_weights):
+    def _set_weight_key(self):
         """
         Set the weight key for use in the dictionary
         """
-        if population_weights:
+        if self.population_weights:
             return "Population"
         else:
             return "Area"
@@ -255,7 +249,10 @@ class AssignWeights:
         """
         cleaned_of_duplication = []
         for value in self._weights[weight_group].values():
-            non_duplication = [[k, v["Area"], v["Population"]] for k, v in zip(value.keys(), value.values())]
+            if self.population_weights:
+                non_duplication = [[k, v["Area"], v["Population"]] for k, v in zip(value.keys(), value.values())]
+            else:
+                non_duplication = [[k, v["Area"]] for k, v in zip(value.keys(), value.values())]
 
             if non_duplication not in cleaned_of_duplication:
                 cleaned_of_duplication.append(non_duplication)
