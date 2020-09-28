@@ -1,13 +1,13 @@
-import json
-import sys
+from weightGIS.common import load_json, write_json
 from collections import Counter
 from csvObject import write_csv
+import sys
 
 
 class WeightExternal:
     def __init__(self, external_data_path, weights_path, date_max, json_data=True):
         self.database, self.searcher, self.attributes = self._load_external(external_data_path, json_data)
-        self._weights_dates = self._load_json(weights_path)
+        self._weights_dates = load_json(weights_path)
         self._user_end_date = date_max
         self._master = {}
         self._non_common = []
@@ -32,7 +32,7 @@ class WeightExternal:
                 self._master[place_name] = self._weight_place(place_name, dates_range)
 
         # Write out the weighted data
-        self._write_json(f"{write_path}/{write_name}", self._master)
+        write_json(f"{write_path}/{write_name}", self._master)
         if len(self._non_common) > 0:
             write_csv(write_path, "NonCommonDates", [], self._non_common)
 
@@ -208,13 +208,14 @@ class WeightExternal:
         except KeyError:
             return None
 
-    def _load_external(self, database_path, json_data):
+    @staticmethod
+    def _load_external(database_path, json_data):
         """
         Load weights and external data
         """
         print("Loading External Data")
         if json_data:
-            data = self._load_json(database_path)
+            data = load_json(database_path)
             search_key = {place.split("__")[0]: place for place in data.keys()}
             attributes = list(set([attr for place in data.keys() for attr in data[place].keys()
                                    if isinstance(data[place][attr], dict)]))
@@ -281,19 +282,3 @@ class WeightExternal:
         """
 
         return [item for sublist in list_of_lists for item in sublist]
-
-    @staticmethod
-    def _load_json(path):
-        """
-        Load a json file at a given path
-        """
-        with open(path) as j:
-            return json.load(j)
-
-    @staticmethod
-    def _write_json(write_path, write_data):
-        """
-        Write the Json data
-        """
-        with open(f"{write_path}.txt", "w", encoding="utf-8") as json_saver:
-            json.dump(write_data, json_saver, ensure_ascii=False, indent=4, sort_keys=True)

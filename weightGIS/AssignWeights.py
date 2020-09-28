@@ -1,4 +1,4 @@
-import json
+from weightGIS.common import load_json, write_json
 from csvObject.csvObject import CsvObject
 from csvObject.csvWriter import write_csv
 
@@ -48,7 +48,7 @@ class AssignWeights:
                 weights_list[place_over_time] = {date: {place: weight for place, weight in place_weights}
                                                  for date, place_weights in weights_over_time}
 
-        self._write_json(self._working_dir, weights_list)
+        write_json(self._working_dir, weights_list)
 
     def _extract_relevant_changes(self, current_gid, shapefile_years, passer="-"):
         """
@@ -229,15 +229,7 @@ class AssignWeights:
         """
         Load in the base weights from a given working directory and file name.
         """
-        return self._load_json(f"{self._working_dir}/BaseWeights/{weights_name}")
-
-    @staticmethod
-    def _load_json(path):
-        """
-        Load a json file at a given path
-        """
-        with open(path) as j:
-            return json.load(j)
+        return load_json(f"{self._working_dir}/BaseWeights/{weights_name}")
 
     def _determine_changes(self, weight_group):
         """
@@ -294,13 +286,6 @@ class AssignWeights:
         else:
             return self._weights[name][str(year)]
 
-    def _write_json(self, write_dir, write_data):
-        """
-        Write the Json data
-        """
-        with open(f"{write_dir}/{self._write_name}.txt", "w", encoding="utf-8") as json_saver:
-            json.dump(write_data, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
-
     def update_base_weight(self, fixed_json_path, name):
         """
         In some situations you may find a complex problem or a mistake and want to update a given place rather than have
@@ -309,13 +294,13 @@ class AssignWeights:
         logged and then the master file will be updated.
         """
         # Load the fix file
-        fixed = self._load_json(fixed_json_path)
+        fixed = load_json(fixed_json_path)
 
         # Create the restructured values for the named place
         key_list = self._replacement_keys(name, fixed)
         restructured = {str(year): self._replacement_values(fixed, name, year, new) for year, new in key_list}
 
         # Write out the new json
-        write_json = self._weights
-        write_json[name] = restructured
-        self._write_json(f"{self._working_dir}/BaseWeights", write_json)
+        write_data = self._weights
+        write_data[name] = restructured
+        write_json(f"{self._working_dir}/BaseWeights", write_data)
