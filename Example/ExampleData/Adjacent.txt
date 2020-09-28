@@ -1,0 +1,12 @@
+{
+    "Danlhigh": [
+        "Ecanlor"
+    ],
+    "Ecanlor": [
+        "Nirghol",
+        "Danlhigh"
+    ],
+    "Nirghol": [
+        "Ecanlor"
+    ]
+}
