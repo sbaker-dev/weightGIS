@@ -1,18 +1,30 @@
-from shapeObject import ShapeObject
+from weightGIS.common import write_json
 from shapely.geometry import MultiPolygon, Polygon, mapping
+from shapeObject import ShapeObject
 
 
 class AdjacentRelations:
-    def __init__(self, shapefile_path, record_identifier):
+    def __init__(self, shapefile_path, record_identifier, write_directory, write_name):
         self.shapefile = ShapeObject(shapefile_path)
         self.rec_id = record_identifier
+        self._write_dir = write_directory
+        self._write_name = write_name
 
     def border_overlap(self):
-        for index, (shape, record) in enumerate(zip(self.shapefile.polygon_geometry, self.shapefile.polygon_records)):
+        """
+        For each shape in the shapefile, this method will iterate through all the points in all the other shapefiles
+        looking for matches. If found, then it will return the identifier record and attach that to the identifier
+        record of the current shape. It will then write the data out to the directory as a json database
+        """
 
-            matches = self._determine_overlap(index, self._extract_points(shape))
-            print(matches)
-            break
+        matches = {}
+        for index, (shape, record) in enumerate(zip(self.shapefile.polygon_geometry, self.shapefile.polygon_records)):
+            if index % 100 == 0:
+                print(f"{index} / {len(self.shapefile.polygon_records)}")
+
+            matches[record[self.rec_id]] = self._determine_overlap(index, self._extract_points(shape))
+
+        write_json(f"{self._write_dir}/{self._write_name}", matches)
 
     def _determine_overlap(self, index, current_points):
         """
@@ -48,9 +60,3 @@ class AdjacentRelations:
             return True
         else:
             return False
-
-
-
-
-
-AdjacentRelations(r"I:\Work\Shapefiles\Districts\EW1951_lgdistricts\EW1951_lgdistricts.shp", 0).border_overlap()
