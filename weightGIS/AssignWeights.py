@@ -48,7 +48,7 @@ class AssignWeights:
                 weights_list[place_over_time] = {date: {place: weight for place, weight in place_weights}
                                                  for date, place_weights in weights_over_time}
 
-        write_json(self._working_dir, weights_list)
+        write_json(f"{self._working_dir}/{self._write_name}", weights_list)
 
     def _extract_relevant_changes(self, current_gid, shapefile_years, passer="-"):
         """
