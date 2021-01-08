@@ -1,11 +1,11 @@
-from shapeObject import ShapeObject
-import os
-import sys
-from shapely.ops import split as shp_split
 from shapely.geometry import LineString, Polygon, MultiPolygon, GeometryCollection
+from shapely.ops import split as shp_split
+from shapeObject import ShapeObject
 from pathlib import Path
 import json
+import sys
 import re
+import os
 
 
 class ConstructWeights:

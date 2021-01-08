@@ -1,4 +1,4 @@
-from weightGIS.common import load_json, write_json
+from miscSupports import load_json, write_json, flatten
 from collections import Counter
 from csvObject import write_csv
 import sys
@@ -32,7 +32,7 @@ class WeightExternal:
                 self._master[place_name] = self._weight_place(place_name, dates_range)
 
         # Write out the weighted data
-        write_json(f"{write_path}/{write_name}", self._master)
+        write_json(self._master, write_path, write_name)
         if len(self._non_common) > 0:
             write_csv(write_path, "NonCommonDates", [], self._non_common)
 
@@ -63,8 +63,8 @@ class WeightExternal:
 
         # Flatten the lists
         for attr in place_dict:
-            place_dict[attr]["Dates"] = self.flatten_list(place_dict[attr]["Dates"])
-            place_dict[attr]["Values"] = self.flatten_list(place_dict[attr]["Values"])
+            place_dict[attr]["Dates"] = flatten(place_dict[attr]["Dates"])
+            place_dict[attr]["Values"] = flatten(place_dict[attr]["Values"])
 
         return place_dict
 
@@ -128,14 +128,14 @@ class WeightExternal:
                       for place, weight in zip(places, weights)]
 
         # Count each occurrence of a date to insure we have the same number in all places
-        dates_dict = Counter(self.flatten_list(dates_list))
+        dates_dict = Counter(flatten(dates_list))
 
         # If we have any non_common dates, we can't use this date for weighting as we won't have data in all of the
         # places involved in the weight
         non_common_dates = [date for date in dates_dict if dates_dict[date] != len(places)]
         if len(non_common_dates) > 0:
             # Write out this information for users so they can fix their raw data
-            self._non_common.append(self.flatten_list([[date, attr] + places for date in non_common_dates]))
+            self._non_common.append(flatten([[date, attr] + places for date in non_common_dates]))
             print(f"Warning: Non Common dates found for {attr} in {places}")
 
         # Return common dates list
@@ -268,17 +268,3 @@ class WeightExternal:
             return sum(values)
         else:
             return "NA"
-
-    @staticmethod
-    def flatten_list(list_of_lists):
-        """
-        This is designed to flatten a list of lists into a single list
-
-        :param list_of_lists: A list of other lists
-        :type list_of_lists: list
-
-        :return: A list with one level of sub-lists flattened
-        :rtype: list
-        """
-
-        return [item for sublist in list_of_lists for item in sublist]

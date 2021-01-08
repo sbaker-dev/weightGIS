@@ -1,4 +1,4 @@
-from weightGIS.common import load_json, write_json
+from miscSupports import load_json, write_json
 from csvObject.csvObject import CsvObject
 from csvObject.csvWriter import write_csv
 
@@ -48,7 +48,7 @@ class AssignWeights:
                 weights_list[place_over_time] = {date: {place: weight for place, weight in place_weights}
                                                  for date, place_weights in weights_over_time}
 
-        write_json(f"{self._working_dir}/{self._write_name}", weights_list)
+        write_json(weights_list, self._working_dir, self._write_name)
 
     def _extract_relevant_changes(self, current_gid, shapefile_years, passer="-"):
         """
@@ -303,4 +303,4 @@ class AssignWeights:
         # Write out the new json
         write_data = self._weights
         write_data[name] = restructured
-        write_json(f"{self._working_dir}/BaseWeights", write_data)
+        write_json(write_data, self._working_dir, "BaseWeights")

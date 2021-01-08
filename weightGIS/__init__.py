@@ -1,2 +1,4 @@
-from weightGIS.AssignWeights import *
-from weightGIS.ConstructWeights import *
+from weightGIS.AdjacentRelations import AdjacentRelations
+from weightGIS.ConstructWeights import ConstructWeights
+from weightGIS.WeightExternal import WeightExternal
+from weightGIS.AssignWeights import AssignWeights
