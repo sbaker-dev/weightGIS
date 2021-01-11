@@ -1,6 +1,7 @@
 from shapely.geometry import LineString, Polygon, MultiPolygon, GeometryCollection
 from shapely.ops import split as shp_split
 from shapeObject import ShapeObject
+from miscSupports import flatten
 from pathlib import Path
 import json
 import sys
@@ -51,9 +52,9 @@ class ConstructWeights:
         :return: The base weights calculated
         :rtype: list
         """
-        base_weights = {f"{rec[self._gid]}__{self.construct_name(rec)}": [] for rec in self.base.polygon_records}
-        for c, (shape, record) in enumerate(zip(self.base.polygon_geometry, self.base.polygon_records)):
-            print(f"{c+1} / {len(self.base.polygon_records)}")
+        base_weights = {f"{rec[self._gid]}__{self.construct_name(rec)}": [] for rec in self.base.records}
+        for c, (shape, record) in enumerate(zip(self.base.polygons, self.base.records)):
+            print(f"{c+1} / {len(self.base.polygons)}")
 
             match_weights = {file: [] for file in [re.sub(r'\D', "", file.file_name) for file in self.shapefiles]}
             for index, match_shape_file in enumerate(self.shapefiles):
@@ -86,7 +87,7 @@ class ConstructWeights:
         :rtype: list[list[int, str, float, Polygon | MultiPolygon]]
         """
         area_weights = []
-        for match_shape, record in zip(match_shape_file.polygon_geometry, match_shape_file.polygon_records):
+        for match_shape, record in zip(match_shape_file.polygons, match_shape_file.records):
             overlap_area = current_shape.intersection(match_shape).area
             if overlap_area > self._cut_off:
                 overlap_percentage = (overlap_area / match_shape.area) * 100
@@ -141,7 +142,7 @@ class ConstructWeights:
         for place_key, place_name, overlap_percentage, overlap in area_weight:
             if int(overlap_percentage) != 100:
                 weight_of_match, weighted_set = self.sub_unit_weight(self.sub_units, overlap, self._weight_index)
-                weight_of_base, weighted_set = self.sub_unit_weight(self.flatten_list(weighted_set), base_shape, None)
+                weight_of_base, weighted_set = self.sub_unit_weight(flatten(weighted_set), base_shape, None)
 
                 sub_unit_weight = (weight_of_base / weight_of_match) * 100
                 reformatted_weights.append([place_key, place_name, overlap_percentage, sub_unit_weight])
@@ -174,7 +175,7 @@ class ConstructWeights:
             sub_unit_file, within_search_polygon, weight_index)
 
         weighted_set = [self.select_under(poly, sub_shape_polygons, record_list, sub_units) for poly in current_shape]
-        weight = sum([area for area, _ in self.flatten_list(weighted_set)])
+        weight = sum([area for area, _ in flatten(weighted_set)])
         return weight, weighted_set
 
     @staticmethod
@@ -279,7 +280,7 @@ class ConstructWeights:
         """
         subunit_list = []
         record_list = []
-        for poly, record in zip(sub_shapes.polygon_geometry, sub_shapes.polygon_records):
+        for poly, record in zip(sub_shapes.polygons, sub_shapes.records):
             if within_search_polygon.intersection(poly).area > self._cut_off:
                 subunit_list.append(poly)
                 record_list.append(record[weight_index])
@@ -464,20 +465,6 @@ class ConstructWeights:
         shape_files = [ShapeObject(f"{file_path}/{file}") for file in shape_file_files]
 
         return ShapeObject(f"{file_path}/{shape_file_files[base_index]}"), base_index, shape_files, subunits
-
-    @staticmethod
-    def flatten_list(list_of_lists):
-        """
-        This is designed to flatten a list of lists into a single list
-
-        :param list_of_lists: A list of other lists
-        :type list_of_lists: list
-
-        :return: A list with one level of sub-lists flattened
-        :rtype: list
-        """
-
-        return [item for sublist in list_of_lists for item in sublist]
 
     def _set_format(self, weights):
         """

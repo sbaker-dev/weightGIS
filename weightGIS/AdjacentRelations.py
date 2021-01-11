@@ -18,9 +18,9 @@ class AdjacentRelations:
         """
 
         matches = {}
-        for index, (shape, record) in enumerate(zip(self.shapefile.polygon_geometry, self.shapefile.polygon_records)):
+        for index, (shape, record) in enumerate(zip(self.shapefile.polygons, self.shapefile.records)):
             if index % 100 == 0:
-                print(f"{index} / {len(self.shapefile.polygon_records)}")
+                print(f"{index} / {len(self.shapefile.records)}")
 
             matches[record[self.rec_id]] = self._determine_overlap(index, self._extract_points(shape))
 
@@ -31,7 +31,7 @@ class AdjacentRelations:
         Iterate through the contents of the shapefile looking for polygons with matching points to the current point set
         """
         border_shapes = []
-        for i, (shape, record) in enumerate(zip(self.shapefile.polygon_geometry, self.shapefile.polygon_records)):
+        for i, (shape, record) in enumerate(zip(self.shapefile.polygons, self.shapefile.records)):
             if self._match(current_points, self._extract_points(shape)) and i != index:
                 border_shapes.append(record[self.rec_id])
         return border_shapes
