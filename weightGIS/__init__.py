@@ -2,3 +2,4 @@ from weightGIS.AdjacentRelations import AdjacentRelations
 from weightGIS.ConstructWeights import ConstructWeights
 from weightGIS.WeightExternal import WeightExternal
 from weightGIS.AssignWeights import AssignWeights
+from weightGIS.GeoLookup import GeoLookup
