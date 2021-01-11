@@ -1,4 +1,4 @@
-from miscSupports import load_json, write_json
+from miscSupports import load_json, write_json, invert_dates
 from csvObject.csvObject import CsvObject
 from csvObject.csvWriter import write_csv
 
@@ -68,7 +68,7 @@ class AssignWeights:
         changes = [place[i] for place in self._dates.row_data if str(current_gid) in place for i in range(len(place))
                    if i in self._date_indexes and place[i] != passer]
 
-        return [int(c) for c in self._invert_dates(changes)
+        return [int(c) for c in invert_dates(changes)
                 if min(shapefile_years) <= int(c) <= max(shapefile_years)]
 
     def _observed_dates(self, changes, shapefile_years):
@@ -126,20 +126,6 @@ class AssignWeights:
             return [int(date + adjust_dates) for date in list(self._weights[place_over_time].keys())]
         else:
             return [int(date) for date in list(self._weights[place_over_time].keys())]
-
-    @staticmethod
-    def _invert_dates(dates_list, delimiter="/"):
-        """
-        Returns dates in an inverted manner as dates may be in a ddmmyyyy but we need it to be yyyymmdd so this
-        reorganises them.
-
-        :param dates_list: List of dates to invert
-        :type dates_list: list[str]
-
-        :return: list of inverted dates
-        :rtype: list[str]
-        """
-        return [date.split(delimiter)[2] + date.split(delimiter)[1] + date.split(delimiter)[0] for date in dates_list]
 
     def _load_dates(self, dates_name):
         """
