@@ -31,11 +31,3 @@ def access_weighted(data_extraction_set, data_requested, name_index=0):
 
     print(f"Retrieved Weighted Data {terminal_time()}")
     return row_data
-
-
-if __name__ == '__main__':
-
-
-    data_set = load_json(r"C:\Users\Samuel\PycharmProjects\weightGIS\Example\ExampleData\WeightedDatabase.txt")
-    annual_data = access_weighted(data_set, ["Births", "Deaths"], 1)
-    print(annual_data)
