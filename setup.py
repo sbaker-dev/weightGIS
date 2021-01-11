@@ -18,16 +18,12 @@ MAINTAINER = 'Samuel Baker'
 MAINTAINER_EMAIL = 'samuelbaker.researcher@gmail.com'
 LICENSE = 'MIT'
 DOWNLOAD_URL = "https://github.com/sbaker-dev/weightGIS"
-VERSION = "0.06.1"
+VERSION = "0.07.0"
 PYTHON_REQUIRES = ">=3.6"
 
 INSTALL_REQUIRES = [
 
-    'csvObject', 'shapeObject', 'shapely']
-
-PACKAGES = [
-    "weightGIS",
-]
+    'csvObject', 'shapeObject', 'shapely', 'miscSupports']
 
 CLASSIFIERS = [
     'Programming Language :: Python :: 3.7',
@@ -37,7 +33,7 @@ CLASSIFIERS = [
 
 if __name__ == "__main__":
 
-    from setuptools import setup
+    from setuptools import setup, find_packages
 
     import sys
 
@@ -58,6 +54,6 @@ if __name__ == "__main__":
         download_url=DOWNLOAD_URL,
         python_requires=PYTHON_REQUIRES,
         install_requires=INSTALL_REQUIRES,
-        packages=PACKAGES,
+        packages=find_packages(),
         classifiers=CLASSIFIERS
     )
