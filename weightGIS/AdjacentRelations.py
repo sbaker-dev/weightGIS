@@ -1,6 +1,6 @@
 from shapely.geometry import MultiPolygon, Polygon, mapping
+from miscSupports import write_json, terminal_time
 from shapeObject import ShapeObject
-from miscSupports import write_json
 
 
 class AdjacentRelations:
@@ -25,7 +25,7 @@ class AdjacentRelations:
             matches[record[self.rec_id]] = self._determine_overlap(index, self._extract_points(shape))
 
         write_json(matches, self._write_dir, self._write_name)
-        print("Constructed Overlap")
+        print(f"Constructed Overlap {terminal_time}")
 
     def _determine_overlap(self, index, current_points):
         """
