@@ -1,20 +1,19 @@
 from miscSupports import load_json, write_json, invert_dates
 from csvObject.csvObject import CsvObject
-from csvObject.csvWriter import write_csv
+from pathlib import Path
 
 
 class AssignWeights:
-    def __init__(self, weights_name, working_dir, write_name, dates_name="Weight_Dates.csv", population_weights=True):
+    def __init__(self, weights_path, working_dir, write_name, dates_path, population_weights=True):
         """
         This class contains the methods needed to actually assign the weights to a usable database
         """
-        self._working_dir = working_dir
-        self._write_name = write_name
-        self.population_weights = population_weights
 
-        self._weights = self._load_weights(weights_name)
-        self._weight_key = self._set_weight_key()
-        self._dates, self._date_indexes = self._load_dates(dates_name)
+        self._working_dir, self._weights, self._weight_key, self._dates, self._date_indexes = self._setup(
+            working_dir, weights_path, population_weights, dates_path)
+
+        self._working_dir = Path(working_dir)
+        self._write_name = write_name
 
     def assign_weights_dates(self, adjust_dates=False):
         """
@@ -127,26 +126,6 @@ class AssignWeights:
         else:
             return [int(date) for date in list(self._weights[place_over_time].keys())]
 
-    def _load_dates(self, dates_name):
-        """
-        Load the dates csv file into a csvObject if it exists and set the indexes of the headers that have the dates
-        within them,, otherwise return nothing.
-        """
-        try:
-            dates = CsvObject(f"{self._working_dir}/{dates_name}")
-            return dates, [index for index, head in enumerate(dates.headers) if "Changes" in head]
-        except FileNotFoundError:
-            return None, None
-
-    def _set_weight_key(self):
-        """
-        Set the weight key for use in the dictionary
-        """
-        if self.population_weights:
-            return "Population"
-        else:
-            return "Area"
-
     def _assigned_dates_to_weights(self, place_over_time, dates_observed, shapefile_years):
         """
         Purpose
@@ -211,82 +190,28 @@ class AssignWeights:
 
         return weights_by_date
 
-    def _load_weights(self, weights_name):
+    @staticmethod
+    def _setup(working_directory, weights_path, population_weights, dates_path):
         """
-        Load in the base weights from a given working directory and file name.
+        Validate paths, load files, and set weight key nad date indexes
         """
-        return load_json(f"{self._working_dir}/BaseWeights/{weights_name}")
 
-    def _determine_changes(self, weight_group):
-        """
-        Check to see if any changes occur for the current places's weight_group within the base weights
+        assert Path(working_directory).exists(), f"Working Directory invalid"
 
-        :param weight_group: The current changes for the current place
-        :type weight_group: int
-        :return: List of all the non duplicated changes
-        """
-        cleaned_of_duplication = []
-        for value in self._weights[weight_group].values():
-            if self.population_weights:
-                non_duplication = [[k, v["Area"], v["Population"]] for k, v in zip(value.keys(), value.values())]
-            else:
-                non_duplication = [[k, v["Area"]] for k, v in zip(value.keys(), value.values())]
+        # Validate dates and load the csv
+        assert Path(dates_path).exists(), "Dates path invalid"
+        dates = CsvObject(dates_path)
+        date_indexes = [index for index, head in enumerate(dates.headers) if "Changes" in head]
 
-            if non_duplication not in cleaned_of_duplication:
-                cleaned_of_duplication.append(non_duplication)
+        # Validate weights path and load the json
+        weights_path = Path(weights_path)
+        assert weights_path.exists()
+        weights = load_json(weights_path)
 
-        return cleaned_of_duplication
-
-    def write_out_changes(self):
-        """
-        To be able to write the weight file we need to know when the changes occur, not just how many changes occur. To
-        do this we need a list of names and the expected number of changes. The assumption is, that a place will not
-        change more than once between census years but when this is not the case we need to be explict about this so we
-        can work of the change manually if need be.
-
-        :return: Nothing, just write out the csv file with the number of expected changes and support search terms
-        :rtype: None
-        """
-        write_holder = [[weight_group, len(self._determine_changes(weight_group)) - 1]
-                        for weight_group in self._weights]
-
-        write_csv(self._working_dir, self._write_name, ["Place", "Expected_Changes"], write_holder)
-
-    def _replacement_keys(self, name, fixed):
-        """
-        This Creates a true false list of keys, where True means that the values will be taken from then fixed file and
-        false from the original
-        """
-        original_keys = [int(key) for key in self._weights[name].keys()]
-        key_list = [[key, False] for key in original_keys] + \
-                   [[new, True] for new in [int(key) for key in fixed[name].keys()] if new not in original_keys]
-        key_list.sort(key=lambda x: x[0])
-        return key_list
-
-    def _replacement_values(self, fixed, name, year, new):
-        """
-        Assign attribute data from the new, or old data based on where the data is.
-        """
-        if new:
-            return fixed[name][str(year)]
+        # Determine the population key based on the type specified
+        if population_weights:
+            weight_key = "Population"
         else:
-            return self._weights[name][str(year)]
+            weight_key = "Area"
 
-    def update_base_weight(self, fixed_json_path, name):
-        """
-        In some situations you may find a complex problem or a mistake and want to update a given place rather than have
-        to - rerun the whole constructor. This allows you to update a given place by its key in the base_weights file
-        you made on all your data, and a new smaller update file. The changes between the update and the master will be
-        logged and then the master file will be updated.
-        """
-        # Load the fix file
-        fixed = load_json(fixed_json_path)
-
-        # Create the restructured values for the named place
-        key_list = self._replacement_keys(name, fixed)
-        restructured = {str(year): self._replacement_values(fixed, name, year, new) for year, new in key_list}
-
-        # Write out the new json
-        write_data = self._weights
-        write_data[name] = restructured
-        write_json(write_data, self._working_dir, "BaseWeights")
+        return working_directory, weights, weight_key, dates, date_indexes
