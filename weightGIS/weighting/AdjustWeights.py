@@ -1,11 +1,14 @@
 from miscSupports import load_json, write_json
 from csvObject.csvWriter import write_csv
+from pathlib import Path
 
 
 class AdjustWeights:
     def __init__(self, working_directory, weights_path):
         self._working_dir = working_directory
-        self._weights = load_json(weights_path)
+        self._weights_path = Path(weights_path)
+        assert self._weights_path.exists(), f"Path to weights is invalid"
+        self._weights = load_json(self._weights_path)
 
     def replace_assigned_weight(self, fixed_json_path, name):
         """
@@ -21,10 +24,10 @@ class AdjustWeights:
         key_list = self._replacement_keys(name, fixed)
         restructured = {str(year): self._replacement_values(fixed, name, year, new) for year, new in key_list}
 
-        # Write out the new json
+        # Updating the existing json with the new information
         write_data = self._weights
         write_data[name] = restructured
-        write_json(write_data, self._working_dir, "BaseWeights")
+        write_json(write_data, self._weights_path.parent, self._weights_path.stem)
 
     def _replacement_keys(self, name, fixed):
         """
@@ -83,9 +86,3 @@ class AdjustWeights:
                 cleaned_of_duplication.append(non_duplication)
 
         return cleaned_of_duplication
-
-    def _load_weights(self, weights_name):
-        """
-        Load in the base weights from a given working directory and file name.
-        """
-        return load_json(f"{self._working_dir}/BaseWeights/{weights_name}")
