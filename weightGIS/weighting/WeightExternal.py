@@ -1,6 +1,5 @@
 from miscSupports import load_json, write_json, flatten
 from collections import Counter
-from csvObject import write_csv
 import sys
 
 
@@ -10,7 +9,7 @@ class WeightExternal:
         self._weights_dates = load_json(weights_path)
         self._user_end_date = date_max
         self._master = {}
-        self._non_common = []
+        self._non_common = {place_name: {} for place_name in self._weights_dates}
 
     def weight_external(self, write_path, write_name="Weighted"):
         """
@@ -34,7 +33,8 @@ class WeightExternal:
         # Write out the weighted data
         write_json(self._master, write_path, write_name)
         if len(self._non_common) > 0:
-            write_csv(write_path, "NonCommonDates", [], self._non_common)
+            write_non_common = {key: value for key, value in self._non_common.items() if len(value) > 0}
+            write_json(write_non_common, write_path, "NonCommonDates")
 
     def _weight_place(self, place_name, dates_range):
         """
@@ -104,7 +104,7 @@ class WeightExternal:
         if len(all_valid) == len(places):
 
             for attr in self.attributes:
-                dates_list = self._extract_usable_dates(attr, date_min, date_max, places, weights)
+                dates_list = self._extract_usable_dates(attr, date_min, date_max, places, weights, place_name)
                 weight_values = [self._weight_summation(date, attr, places, weights) for date in dates_list]
 
                 place_dict[attr]["Dates"].append(dates_list)
@@ -114,7 +114,7 @@ class WeightExternal:
             print(f"Warning only found data for {len(all_valid)} of the expected {len(places)} places for "
                   f"{[self._search_name(place) for place in places]}")
 
-    def _extract_usable_dates(self, attr, date_min, date_max, places, weights):
+    def _extract_usable_dates(self, attr, date_min, date_max, places, weights, place_name):
         """
         If we have multiple places, not all places may have the same dates. We cannot create a weighted value from
         multiple places if some of those places are missing. So in these cases, nothing is written to the dataset, and
@@ -135,7 +135,8 @@ class WeightExternal:
         non_common_dates = [date for date in dates_dict if dates_dict[date] != len(places)]
         if len(non_common_dates) > 0:
             # Write out this information for users so they can fix their raw data
-            self._non_common.append(flatten([[date, attr] + places for date in non_common_dates]))
+            self._non_common[place_name][attr] = {"Places": places, "Target": len(places),
+                                                  "Dates": {d: dates_dict[d] for d in non_common_dates}}
             print(f"Warning: Non Common dates found for {attr} in {places}")
 
         # Return common dates list
