@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 class AssignWeights:
-    def __init__(self, weights_path, working_dir, write_name, dates_path, population_weights=True):
+    def __init__(self, weights_path, working_dir, write_name, dates_path, population_weights=True, raw_years=None):
         """
         This class contains the methods needed to actually assign the weights to a usable database
         """
@@ -14,6 +14,7 @@ class AssignWeights:
 
         self._working_dir = Path(working_dir)
         self._write_name = write_name
+        self._raw_years = raw_years
 
     def assign_weights_dates(self, adjust_dates=False):
         """
@@ -35,7 +36,6 @@ class AssignWeights:
             shapefile_years = self._set_shapefile_years(adjust_dates, place_over_time)
             changes = self._extract_relevant_changes(place_over_time.split("__")[0], shapefile_years)
 
-            print(changes)
             if len(changes) == 0:
                 # If no changes occur, just access the first entry and set our dictionary to these values
                 weights_list[place_over_time] = {min(shapefile_years): {place_over_time: 100.0}}
@@ -49,7 +49,7 @@ class AssignWeights:
 
         write_json(weights_list, self._working_dir, self._write_name)
 
-    def _extract_relevant_changes(self, current_gid, shapefile_years, passer="-"):
+    def _extract_relevant_changes(self, current_gid, shapefile_years, dl="-"):
         """
         If the GID is within the a given row of data from dates file then we want to extract the date columns from that
         row by using the dates_indexes as an indexer. The format that is used is yyyymmdd so we then want to invert
@@ -58,17 +58,31 @@ class AssignWeights:
         :param current_gid: The current GID of the current place
         :type: str
 
-        :param passer: The character used as the blank
-        :type passer: str
+        :param dl: The character used as the blank
+        :type dl: str
 
         :return: A list of relevant dates of changes in the format of [yyyymmdd, ... yyyymmdd]
         :rtype: list
         """
-        changes = [place[i] for place in self._dates.row_data if str(current_gid) in place for i in range(len(place))
-                   if i in self._date_indexes and place[i] != passer]
 
-        return [int(c) for c in invert_dates(changes)
-                if min(shapefile_years) <= int(c) <= max(shapefile_years)]
+        place = self._get_place(current_gid)
+        # Create the dates from Weight_Dates.csv
+        dates = [int(invert_dates(place[i])) for i in range(len(place)) if i in self._date_indexes and place[i] != dl]
+
+        # If we have raw years provided, because we have additional dates within the shapefiles, then look for
+        # them
+        if self._raw_years:
+            return [s for s in shapefile_years if (s not in self._raw_years) and (s not in dates)] + dates
+
+        # Otherwise just return dates from the dates file
+        else:
+            return dates
+
+    def _get_place(self, current_gid):
+        """Extract the row we need if the gid is in it"""
+        for place in self._dates.row_data:
+            if str(current_gid) in place:
+                return place
 
     def _observed_dates(self, changes, shapefile_years):
         """
@@ -178,7 +192,6 @@ class AssignWeights:
              area_weight, pop_weight]]
         :rtype: list
         """
-        print(dates_observed)
         weights_by_date = []
         for index, values in enumerate(self._weights[place_over_time].values()):
             if index == 0:
