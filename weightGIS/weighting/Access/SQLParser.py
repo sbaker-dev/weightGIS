@@ -1,4 +1,5 @@
 from miscSupports import flatten, find_duplicates, parse_as_numeric
+from collections import Counter
 from operator import itemgetter
 from pathlib import Path
 import sqlite3
@@ -39,6 +40,19 @@ class SQLParser:
         """Extract a table attributes"""
         extract_all = self.cursor.execute(f"""SELECT * FROM {table_name}""")
         return [description[0] for description in extract_all.description]
+
+    def table_places(self, table_name):
+        """Extract the places of this location, returns as a sorted list of the unique place names found"""
+        return sorted(list(set([p[0] for p in self.cursor.execute(f"SELECT Place FROM {table_name}").fetchall()])))
+
+    def table_dates(self, table_name, as_counter=False):
+        """Extract the dates for this location using Counter, Returns as Counter if requested else unique sorted list"""
+        dates = self.cursor.execute(f"SELECT Date FROM {table_name}").fetchall()
+        dates_occurrences = Counter([d[0] for d in dates])
+        if as_counter:
+            return dates_occurrences
+        else:
+            return sorted(list(dates_occurrences.keys()))
 
     def extract_attribute(self, table_name, attribute, remove_missing=False):
         """Extract a single attribute and return all its values unless remove missing is set, where NA is removed"""
