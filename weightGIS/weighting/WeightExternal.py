@@ -85,7 +85,7 @@ class WeightExternal:
                 place_dict[attr]["Dates"].append(dates)
                 place_dict[attr]["Values"].append(values)
         else:
-            print(f"Warning: No data found for {self._search_name(place)}")
+            print(f"Warning: No data found for {place}")
 
     def _weight_multiple(self, place_name, date, place_dict, date_min, date_max):
         """
