@@ -1,0 +1,64 @@
+{
+    "1__Ecanlor": {
+        "1931": {
+            "1__Ecanlor": {
+                "Area": 100.0,
+                "Population": 100.0
+            },
+            "3__Danlhigh": {
+                "Area": 41.76016134968026,
+                "Population": 1.8336986193489935
+            }
+        },
+        "1938": {
+            "1__Ecanlor": {
+                "Area": 100.0,
+                "Population": 100.0
+            },
+            "3__Danlhigh": {
+                "Area": 21.389997970063323,
+                "Population": 1.013366955923584
+            }
+        },
+        "1951": {
+            "1__Ecanlor": {
+                "Area": 100.0,
+                "Population": 100.0
+            }
+        }
+    },
+    "2__Nirghol": {
+        "1931": {
+            "2__Nirghol": {
+                "Area": 100.0,
+                "Population": 100.0
+            }
+        },
+        "1951": {
+            "2__Nirghol": {
+                "Area": 100.0,
+                "Population": 100.0
+            }
+        }
+    },
+    "3__Danlhigh": {
+        "1931": {
+            "3__Danlhigh": {
+                "Area": 58.239366395524215,
+                "Population": 98.16443083327889
+            }
+        },
+        "1938": {
+            "3__Danlhigh": {
+                "Area": 78.61000202993665,
+                "Population": 98.98475711614552
+            }
+        },
+        "1951": {
+            "3__Danlhigh": {
+                "Area": 100.0,
+                "Population": 100.0
+            }
+        }
+    }
+}
