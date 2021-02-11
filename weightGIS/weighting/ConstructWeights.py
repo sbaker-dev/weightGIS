@@ -36,6 +36,7 @@ class ConstructWeights:
         self._name_class = name_class
         self._cut_off = cut_off
         self._weight_index = weight_index
+        self.shape_folder = shape_file_folder_name
 
     def construct_base_weights(self):
         """
@@ -393,17 +394,24 @@ class ConstructWeights:
 
         :return: Nothing, write out file then stop
         :rtype: None
+
         """
+        # Set write out name
+        if self.shape_folder != "Shapefiles":
+            name = self.shape_folder
+        else:
+            name = "BaseWeights"
+
+        # Try to write out the weights, but attempt to do so without the rick of over-writing the file
         try:
             length = len([file for file in os.listdir(f"{self._working_dir}/BaseWeights")])
-            with open(f"{self._working_dir}/BaseWeights/BaseWeights_{length}.txt", "w", encoding="utf-8") as json_saver:
+            with open(f"{self._working_dir}/BaseWeights/{name}_{length}.txt", "w", encoding="utf-8") as json_saver:
                 json.dump(base_weights, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
 
         except FileNotFoundError:
             Path(f"{self._working_dir}/BaseWeights").mkdir()
-
             length = len([file for file in os.listdir(f"{self._working_dir}/BaseWeights")])
-            with open(f"{self._working_dir}/BaseWeights/BaseWeights_{length}.txt", "w", encoding="utf-8") as json_saver:
+            with open(f"{self._working_dir}/BaseWeights/{name}_{length}.txt", "w", encoding="utf-8") as json_saver:
                 json.dump(base_weights, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
 
         except OSError as ex:
