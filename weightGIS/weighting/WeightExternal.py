@@ -32,7 +32,7 @@ class WeightExternal:
 
         # Write out the weighted data
         write_json(self._master, write_path, write_name)
-        if len(self._non_common) > 0:
+        if len(self._non_common.keys()) > 0:
             write_non_common = {key: value for key, value in self._non_common.items() if len(value) > 0}
             write_json(write_non_common, write_path, "NonCommonDates")
 
