@@ -253,10 +253,15 @@ class FormatExternal:
 
             # If all are true, isolate the first element as the standardised name.
             if all(checked_row):
-                return [r if i == 0 else r[0] for i, r in enumerate(row)]
+                return self._set_standardised_place(row)
 
         # If we fail raise an index error
         raise IndexError(f"{place_names} was not matched. Please update your Place Reference file accordingly.")
+
+    @staticmethod
+    def _set_standardised_place(place_groups):
+        """Extract the GID from the first entry, and the first name of each group for all others"""
+        return [place if i == 0 else place[0] for i, place in enumerate(place_groups)]
 
     def solve_ambiguity(self, standardised_directory, write_directory):
         """
