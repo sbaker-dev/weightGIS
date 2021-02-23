@@ -41,12 +41,29 @@ class AdjustWeights:
         """
         This Creates a true false list of keys, where True means that the values will be taken from then fixed file and
         false from the original
+
+        :param name: The place name that exists in both the master _weights and the fixed file that was loaded
+        :type name: str
+
+        :param fixed: The json data that is going to be used to replace values in the master _weights database that has
+            been loaded into a dict
+        :type fixed: dict
+
+        :return: A list of [weight: bool], to represent if we want to take the old or new weight for this place for each
+            date found across both the original and new 'fixed' file. True represents the new fixed file, false the
+            original.
+        :rtype: list[list[int, bool]]
         """
-        original_keys = [int(key) for key in self._weights[name].keys()]
-        key_list = [[key, False] for key in original_keys] + \
-                   [[new, True] for new in [int(key) for key in fixed[name].keys()] if new not in original_keys]
-        key_list.sort(key=lambda x: x[0])
-        return key_list
+        # Isolate the weight as a date, represent as an int, for all the weights in the current place in the _weights
+        original_weights = [int(key) for key in self._weights[name].keys()]
+
+        # If the date does not exist in the fixed file, keep the original, otherwise set the new value from fixed
+        new_weights = [[key, False] for key in original_weights] + \
+                      [[new, True] for new in [int(key) for key in fixed[name].keys()] if new not in original_weights]
+
+        # Order the weights on the first element; the dates. Then return
+        new_weights.sort(key=lambda x: x[0])
+        return new_weights
 
     def _replacement_values(self, fixed, name, year, new):
         """
@@ -56,6 +73,34 @@ class AdjustWeights:
             return fixed[name][str(year)]
         else:
             return self._weights[name][str(year)]
+
+    def remove_weight(self, place, weight_date):
+        """
+        Remove a weight from a place
+
+        Sometimes you may have a weight assigned that you do not want. For example, if a there is a minor error in the
+        drawing of a shapefile between periods you will end up with a change which may not actually occur. You can
+        remove a 'weight' from a 'place' by providing the place key to place, and the weight you want to remove to
+        'weight'.
+
+        :param place: The place to load from the master database
+        :type place: str
+
+        :param weight_date: The weight's date to remove from the master
+        :type weight_date: str
+
+        :return: Nothing, remove from the master then stop
+        :rtype: None
+        """
+        # Load the current place form the weights
+        current = self._weights[place]
+
+        # Create the replacement, where the each date is assign its previous weight places as long as the date does not
+        # equal the weight_date provided
+        replacement = {date: weight_places for date, weight_places in current.items() if date != weight_date}
+
+        # Replace original place weights with replacement
+        self._weights[place] = replacement
 
     def add_place(self, new_weight):
         """
@@ -92,6 +137,8 @@ class AdjustWeights:
 
     def write_out_changes(self, write_name, population_weights=True):
         """
+        Write out a csv of all changes that occur on a per place
+
         To be able to write the weight file we need to know when the changes occur, not just how many changes occur. To
         do this we need a list of names and the expected number of changes. The assumption is, that a place will not
         change more than once between census years but when this is not the case we need to be explict about this so we
