@@ -74,6 +74,22 @@ class AdjustWeights:
         for key in new_weight.keys:
             self._weights[key] = new_weight[key]
 
+    def remove_place(self, places_to_remove):
+        """
+        Remove a place from the master dict
+
+        You may have a place you do not want in the master dict, but do not want to edit the shapefile to ensure it is
+        not added. You can remove as many places as you want by providing a list of places to remove to this method.
+
+        :param places_to_remove: The places you wish to remove from the master dict, represents the master dicts keys.
+        :type: list
+
+        :return: Nothing, will remove from master then stop
+        :rtype: None
+        """
+
+        self._weights = {key: value for key, value in self._weights.items() if key not in places_to_remove}
+
     def write_out_changes(self, write_name, population_weights=True):
         """
         To be able to write the weight file we need to know when the changes occur, not just how many changes occur. To
