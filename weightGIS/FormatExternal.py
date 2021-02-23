@@ -1,4 +1,4 @@
-from miscSupports import directory_iterator
+from miscSupports import directory_iterator, find_duplicates
 from csvObject import CsvObject, write_csv
 from pathlib import Path
 import numpy as np
@@ -258,16 +258,50 @@ class FormatExternal:
         # If we fail raise an index error
         raise IndexError(f"{place_names} was not matched. Please update your Place Reference file accordingly.")
 
+    def solve_ambiguity(self, data_directory, write_directory):
+        """
+        There may be duplicates in the verified data as some districts (like a north and south report of a given
+        district) are not actually divisible
+        """
+        for file in directory_iterator(data_directory):
+            print(file)
 
+            # Load the original file and look for duplicate GIDs; which should be unique
+            data = CsvObject(Path(data_directory, file), set_columns=True)
+            duplicate_list = find_duplicates(data.column_data[0])
 
+            # Isolate any row that does not suffer from duplication as the base of the write return
+            reset_row = [row for row in data.row_data if row[0] not in duplicate_list]
 
+            for dup in duplicate_list:
+                # Isolate the row names
+                row_names = data.row_data[data.column_data[0].index(dup)][:len(self._reference_types)]
 
+                # Isolate the values for each duplicate name
+                sub_list = [[float(rr) for rr in r[len(self._reference_types):]] for r in data.row_data if dup == r[0]]
+
+                # Isolate unique lists, to remove duplicates
+                unique_sub_lists = [list(x) for x in set(tuple(x) for x in sub_list)]
+
+                # Warn the user that some values have been combined.
+                if len(unique_sub_lists) > 1:
+                    print(f"Found and combined multiple entries that where not perfect duplicates for {row_names}")
+
+                # Add the combined values or singular entry of duplicate values to the reset list
+                reset_row.append(row_names + [sum(i) for i in zip(*unique_sub_lists)])
+
+            write_csv(write_directory, data.file_path.stem, data.headers, reset_row)
 
 
 if __name__ == '__main__':
-    FormatExternal(r"C:\Users\Samuel\PycharmProjects\Biomerger\PlaceReference\PlaceReference.csv",
-                   "GBHD",
-                   r"C:\Users\Samuel\PycharmProjects\Biomerger\PlaceReference\Corrections.csv",
-                   place_map=[1, 0]
-                   ).standardise_names(r"I:\Work\DataBases\GBHD\Reformated",
-                                       "I:\Work\DataBases\GBHD\Test\Stamd")
+    test = FormatExternal(r"C:\Users\Samuel\PycharmProjects\Biomerger\PlaceReference\PlaceReference.csv",
+                          "GBHD",
+                          r"C:\Users\Samuel\PycharmProjects\Biomerger\PlaceReference\Corrections.csv",
+                          place_map=[1, 0]
+                          )
+
+    # test.standardise_names(r"I:\Work\DataBases\GBHD\Reformated",
+    #                        r"I:\Work\DataBases\GBHD\Test\Stamd")
+
+    test.solve_ambiguity(r"I:\Work\DataBases\GBHD\Test\Stamd",
+                         r"I:\Work\DataBases\GBHD\Test\Amg")
