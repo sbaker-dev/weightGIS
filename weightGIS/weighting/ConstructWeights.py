@@ -99,8 +99,6 @@ class ConstructWeights:
         """
         Constructs the place name
 
-        Further Information
-        ---------------------
         Names may be broken into types, for example in the UK Districts can often have an urban and rural districts
         which means the actual name of the district is split into two columns. This function stitches the names back
         together if this is the case, and just returns the name otherwise
@@ -121,8 +119,6 @@ class ConstructWeights:
         """
         Calculates and returns the sub unit weight for each overlapping shape
 
-        Further Information
-        --------------------
         If the overlap percentage isn't 100 then the population weight can be calculated from the under-lapping shapes.
         First all the parts of the under-lapping shapes of the overlapping distinct are isolated to calculate the total
         value of the sub weight value. Then, the parts of this shape that overlap the base_shape we are indexing too
@@ -183,8 +179,6 @@ class ConstructWeights:
         Returns the under-lapping sub units, weight records, reformed under-lapping sub units to be just Polygons and
         the reformed current shape
 
-        Further information
-        ---------------------
         This method is going to be called twice per overlapping polygon of the base shapefiles current polygon. Once to
         find the under-lapping units of the overlapping polygon, and once to see of these under-lapping units how much
         of them are in the base shapefiles current polygon.
@@ -270,8 +264,6 @@ class ConstructWeights:
         Select under-lapping polygons, select the interior parts of them, punch out any holes that existed in the the
         current polygon, and then return a list of lists of the weights and polygons.
 
-        Further information
-        --------------------
         This splits the shapes that where found to be under-lapping and then isolates the interior polygons. If the
         current polygon has a hole, or hole(s) within it, then this hole is then used as to punch out the under-lapping
         polygons. Finally the weight is calculated and the combined with the polygon and returned in the form of a list
@@ -310,7 +302,7 @@ class ConstructWeights:
 
     def _split_sub_unit_shapes(self, sublist_shape_polygons, polygon):
         """
-        returns a list of Geometery collects with the reference index to the original
+        Returns a list of Geometery collects with the reference index to the original
 
         :param sublist_shape_polygons: reformed under-lapping sub units to be just Polygons
         :type sublist_shape_polygons: list[list[Polygon]]
@@ -453,7 +445,7 @@ class ConstructWeights:
     def _set_format(self, weights):
         """
         If we only have area weights, then we won't have the same number of data points and will lead to an unexpected
-        unpacking error. So we use the existance of sub units to determine the data that is written out
+        unpacking error. So we use the existence of sub units to determine the data that is written out
         """
 
         if self.sub_units:

@@ -142,8 +142,6 @@ class AssignWeights:
 
     def _assigned_dates_to_weights(self, place_over_time, dates_observed, shapefile_years):
         """
-        Purpose
-        --------
         This assigns the date to the change that has been observed in the shapefile.
 
         Example
