@@ -7,15 +7,23 @@ class AdjustWeights:
     def __init__(self, working_directory, weights_path):
         self._working_dir = working_directory
         self._weights_path = Path(weights_path)
-        assert self._weights_path.exists(), f"Path to weights is invalid"
+        assert self._weights_path.exists(), "Path to weights is invalid"
         self._weights = load_json(self._weights_path)
 
     def replace_assigned_weight(self, fixed_json_path, name):
         """
+        Find a place within the master dict called 'name' and add dates from the json file of fixed_json_path
+
         In some situations you may find a complex problem or a mistake and want to replace a given place rather than
         have to - rerun the whole constructor. This allows you to replace a given place by its key in the base_weights
         file you made on all your data, and a new smaller update file. The changes between the update and the master
         will be logged and then the master file will be updated.
+
+        :param fixed_json_path: The path to the json file to load the fixed dates from
+        :type fixed_json_path: Path | str
+
+        :param name: The place key in the master _weights to load and replace dates from
+        :type name: str
         """
         # Load the fix file
         fixed = load_json(fixed_json_path)
@@ -49,6 +57,23 @@ class AdjustWeights:
         else:
             return self._weights[name][str(year)]
 
+    def add_place(self, new_weight):
+        """
+        Add a place to master dict
+
+        In some situations you may wish to add a place that was not set, or you have removed a weight and now want
+        to add it's replacement. Here you just assign dict you want to assign to the master json dict, each key will
+        be added to the master dict.
+
+        :param new_weight: A dict of place: weights, where place is the name of the place to be weighted and the weights
+            the weights assigned at given dates assigned to the place
+        :return: Nothing, will add to master dict then stop
+        :rtype: None
+        """
+
+        for key in new_weight.keys:
+            self._weights[key] = new_weight[key]
+
     def write_out_changes(self, write_name, population_weights=True):
         """
         To be able to write the weight file we need to know when the changes occur, not just how many changes occur. To
@@ -71,9 +96,12 @@ class AdjustWeights:
 
         :param weight_group: The current changes for the current place
         :type weight_group: int
+
         :param population_weights: If population weights where used
         :type: bool
+
         :return: List of all the non duplicated changes
+        :rtype: list
         """
         cleaned_of_duplication = []
         for value in self._weights[weight_group].values():
