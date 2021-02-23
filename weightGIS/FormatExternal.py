@@ -258,16 +258,26 @@ class FormatExternal:
         # If we fail raise an index error
         raise IndexError(f"{place_names} was not matched. Please update your Place Reference file accordingly.")
 
-    def solve_ambiguity(self, data_directory, write_directory):
+    def solve_ambiguity(self, standardised_directory, write_directory):
         """
-        There may be duplicates in the verified data as some districts (like a north and south report of a given
-        district) are not actually divisible
+        Remove perfect duplicates and combine non perfect duplicates so that all GIDs are unique.
+
+        Some places may end up being duplicated, in the raw data or after standardisation. This method will remove
+        perfect duplicates, and combine non perfect duplicates into a single entry. Keep in mind, that if this is not
+        desirable, that the system will print out each non-perfect duplication merge it has done. You may wish to alter
+        your original data set, or change your place reference to avoid this from happening.
+
+        :param standardised_directory: The data directory of the output from standardise_names
+        :type standardised_directory: str | Path
+
+        :param write_directory: The output directory
+        :type write_directory: str | Path
         """
-        for file in directory_iterator(data_directory):
+        for file in directory_iterator(standardised_directory):
             print(file)
 
             # Load the original file and look for duplicate GIDs; which should be unique
-            data = CsvObject(Path(data_directory, file), set_columns=True)
+            data = CsvObject(Path(standardised_directory, file), set_columns=True)
             duplicate_list = find_duplicates(data.column_data[0])
 
             # Isolate any row that does not suffer from duplication as the base of the write return
