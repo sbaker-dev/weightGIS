@@ -1,5 +1,6 @@
-from miscSupports import directory_iterator, find_duplicates
+from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json
 from csvObject import CsvObject, write_csv
+from multiprocessing import Process
 from pathlib import Path
 import numpy as np
 import re
@@ -307,16 +308,148 @@ class FormatExternal:
 
             write_csv(write_directory, data.file_path.stem, data.headers, reset_row)
 
+    def relational_database(self, cleaned_directory, write_directory):
+        """
+        Create a json file for place that contains all the information across time from the standardised data via sub
+        processing to speed up the process. Loads the names from the PlaceReference file set to _matcher
 
-if __name__ == '__main__':
-    test = FormatExternal(r"C:\Users\Samuel\PycharmProjects\Biomerger\PlaceReference\PlaceReference.csv",
-                          "GBHD",
-                          r"C:\Users\Samuel\PycharmProjects\Biomerger\PlaceReference\Corrections.csv",
-                          place_map=[1, 0]
-                          )
+        At present we have multiple files, one file for each entry of data. This method will standardise all the data
+        from a given place into a single dict so that we can easily combine multiple dataset's.
 
-    # test.standardise_names(r"I:\Work\DataBases\GBHD\Reformated",
-    #                        r"I:\Work\DataBases\GBHD\Test\Stamd")
+        Note
+        ----
+        This is normally quite a slow process, hence allow for multi-core functionality, but also it will NOT over-write
+        files. This is so you can fix smaller areas and not have to regenerate the whole list. Keep in mind therefore
+        that if you do wish to re-run the program you will need an empty write_directory.
 
-    test.solve_ambiguity(r"I:\Work\DataBases\GBHD\Test\Stamd",
-                         r"I:\Work\DataBases\GBHD\Test\Amg")
+        :param cleaned_directory: The files that have been standardised and then checked for ambiguity
+        :type cleaned_directory: Path | str
+
+        :param write_directory: The output directory
+        :type write_directory: Path | str
+
+        :return: Nothing, write each json file out and then stop
+        :rtype: None
+        """
+
+        chunked = chunk_list([i for i in range(len(self._matcher))], int(len(self._matcher) / self._cpu_cores))
+        processes = [Process(target=self.relational_subprocess,
+                             args=(index_list, index, cleaned_directory, write_directory))
+                     for index, index_list in enumerate(chunked, 1)]
+
+        for process in processes:
+            process.start()
+
+        for process in processes:
+            process.join()
+
+    def relational_subprocess(self, index_list, index_of_process, data_directory, write_directory):
+        """
+        This sub process is run via a call from relational_database via Process
+
+        Each process is set a sub selection of indexes from the PlaceReference loaded into _matcher. Each process will
+        then isolate this name and create a output json database for it by extracting any matching entries attributes
+        from the data directory.
+
+        :param index_list: A list of indexes to load from the PlaceReference for this process
+        :type index_list: list[int]
+
+        :param index_of_process: Which process thread this is
+        :type index_of_process: int
+
+        :param data_directory: Load directory the of standardised, cleaned, and correct data
+        :type data_directory: str | Path
+
+        :param write_directory: Write Directory for the json database
+        :type write_directory: str | Path
+
+        :return: Nothing, write a json database for each location that has been indexed from the PlaceReference.
+        :rtype: None
+        """
+
+        # Currently processed files in the output directory
+        current_files = [f for f in directory_iterator(write_directory)]
+
+        for call_index, place_index in enumerate(index_list, 1):
+            print(f"{call_index} / {len(index_list)} for process {index_of_process}")
+
+            # Create the unique name from the groups and isolate the gid for parsing the csv
+            unique_name = "__".join(self._set_standardised_place(self._matcher[place_index]))
+            gid = self._matcher[place_index][0]
+
+            # Set the output stub for this place's json database
+            place_data = {"Place_Name": unique_name, "GID": gid}
+
+            # If the data has not already been processed
+            if self._not_processed(unique_name, current_files):
+                for file in directory_iterator(data_directory):
+
+                    # Load the data into memory
+                    data = CsvObject(Path(data_directory, file), set_columns=True)
+
+                    # Isolate any data pertaining to this place from this file and add them to the place_data dict
+                    self._process_relation_data(data, gid, place_data)
+
+                write_json(place_data, write_directory, f"{unique_name}_{self._data_name}")
+
+    def _not_processed(self, unique_name, current_files):
+        """
+        If a file doesn't exist, then we want to process it.
+        """
+        if f"{unique_name}_{self._data_name}.txt" not in current_files:
+            return True
+        else:
+            print(f"Already processed {unique_name}")
+
+    def _process_relation_data(self, data, gid, place_data):
+        """
+        Set the attribute values to the date of this file's data.
+
+        Each place should now be unique after going through the cleaning procedures. This isolates all the headers that
+        are not places, and if they are not already, sets them as attributes to out json place_data dict. The values
+        are then set in a date: value dict per attribute, where the date is isolated from the data's filename.
+
+        :param data: A CsvObject of the current file's data
+        :type data: CsvObject
+
+        :param gid: The unique number for this location
+
+        :param place_data: Output json data dict
+        :type place_data: dict
+
+        :return: Nothing, update the json data dict's attributes then stop or do not process if the place is not present
+        :rtype: None
+
+        :raises KeyError: If the gid is not unique
+        """
+
+        # Isolate the non place name headers to be used as attribute keys
+        header_keys = data.headers[len(self._reference_types):]
+
+        # Count the occurrences of the GID
+        gid_count = data.column_data[0].count(gid)
+
+        # If it happens more than once, raise an KeyError as it should be unique
+        if gid_count > 1:
+            raise KeyError(f"ERROR: {gid} found twice in {data.file_name}")
+
+        # If it is less than 1 then return none and stop, this place doesn't exist at this point in time
+        elif gid_count < 1:
+            return None
+
+        # Otherwise extract the data for this place.
+        else:
+            # Add headers to the place data dict if it does not already exist
+            for header in header_keys:
+                if header not in place_data:
+                    place_data[header] = {}
+
+            # Isolate the data from this file relating to this GID
+            row_isolate = data.row_data[(data.column_data[0].index(gid))][len(self._reference_types):]
+
+            # Update the attributes, assigning them as floats if possible.
+            for attribute, value in zip(header_keys, row_isolate):
+                try:
+                    place_data[attribute][int(data.file_path.stem)] = float(value)
+                except ValueError:
+                    place_data[attribute][int(data.file_path.stem)] = value
