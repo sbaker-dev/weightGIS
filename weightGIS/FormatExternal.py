@@ -1,4 +1,4 @@
-from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json
+from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json, load_json
 from csvObject import CsvObject, write_csv
 from multiprocessing import Process
 from pathlib import Path
@@ -453,3 +453,59 @@ class FormatExternal:
                     place_data[attribute][int(data.file_path.stem)] = float(value)
                 except ValueError:
                     place_data[attribute][int(data.file_path.stem)] = value
+
+    def combine_dataset(self, path_list, write_directory, database_name):
+        """
+        This will combine all the dataset's you have made into a single json database
+
+        This will combine all the regional data from all standardised dataset's into a single json database. If you only
+        had 1 database to begin with, then this just adds all the separate json databases into a single 1. Where it is
+        mostly used, is when you have run this process on multiple dataset's and now want all the standardised places to
+        share attribute data in a single database.
+
+        :param path_list: A list of paths, where each path goes to a set directory
+        :type path_list: list[str | Path]
+
+        :param write_directory: The write directory of the master database
+        :type write_directory: str | Path
+
+        :param database_name: The master database name
+        :type database_name: str
+
+        :return: Nothing, write the database to file then stop
+        :rtype: None
+        """
+
+        # Initialise the output database
+        master_database = {}
+
+        # Isolate all the paths to all the files we want to load across all the database for this geo-level
+        level_data = [Path(path, file) for path in path_list for file in directory_iterator(path)]
+
+        for index, file in enumerate(level_data):
+            if index % 100 == 0:
+                print(f"{index}/{len(level_data)}")
+
+            # Load the data for this file into memory, set the master database assign name via Place_Name
+            load_data = load_json(file)
+            assign_name = load_data["Place_Name"]
+
+            # If the current attribute does not exist within the current database, add it to it
+            current_attributes = self._current_attributes(master_database, assign_name)
+            for attr in load_data.keys():
+                if attr not in current_attributes:
+                    master_database[assign_name][attr] = load_data[attr]
+
+        write_json(master_database, write_directory, database_name)
+
+    @staticmethod
+    def _current_attributes(master_database, assign_name):
+        """
+        Return all the attributes for the current place if it exists in the master database, otherwise return an empty
+        dict and set the mater database to contain an entry equal to the name.
+        """
+        try:
+            return [attr for attr in master_database[assign_name]]
+        except KeyError:
+            master_database[assign_name] = {}
+            return []
