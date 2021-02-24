@@ -101,6 +101,7 @@ class AdjustWeights:
 
         # Replace original place weights with replacement
         self._weights[place] = replacement
+        write_json(self._weights, self._weights_path.parent, self._weights_path.stem)
 
     def add_place(self, new_weight):
         """
@@ -118,6 +119,7 @@ class AdjustWeights:
 
         for key in new_weight.keys():
             self._weights[key] = new_weight[key]
+        write_json(self._weights, self._weights_path.parent, self._weights_path.stem)
 
     def remove_place(self, places_to_remove):
         """
@@ -134,6 +136,7 @@ class AdjustWeights:
         """
 
         self._weights = {key: value for key, value in self._weights.items() if key not in places_to_remove}
+        write_json(self._weights, self._weights_path.parent, self._weights_path.stem)
 
     def write_out_changes(self, write_name, population_weights=True):
         """
