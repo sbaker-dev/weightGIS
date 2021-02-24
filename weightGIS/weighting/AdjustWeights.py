@@ -116,7 +116,7 @@ class AdjustWeights:
         :rtype: None
         """
 
-        for key in new_weight.keys:
+        for key in new_weight.keys():
             self._weights[key] = new_weight[key]
 
     def remove_place(self, places_to_remove):
