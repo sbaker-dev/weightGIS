@@ -260,8 +260,8 @@ class WeightExternal:
                     pass
 
         else:
-            print(f"Warning: found {len(all_valid)} out of {len(weight_places)} places for {place_name}'s weighted "
-                  f"places of: {weight_places}")
+            print(f"Warning: Found {len(all_valid)} out of {len(weight_places)} places for {place_name}'s weighted "
+                  f"places of: {weight_places}\n       : Data from {weight_date}-{date_max} will be dropped\n")
 
     def _extract_usable_dates(self, attr, date_min, date_max, weight_places, place_name):
         """
