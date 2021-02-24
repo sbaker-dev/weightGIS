@@ -28,9 +28,6 @@ It can also be used for other relationships, so as getting adjacent polygons or 
 differing levels of geographic sedation relate to each other. Examples of these can be found within RelationExamples
 jupyter Notebooks
 
-#### Adjacent Polygons
-You may wish to relate polygons by nearest neighbours, or N neighbours of nearest neighbours, and this will help you
-construct these relationships.
 
 #### Geographical Relations
 We are often have shapefiles at multiple levels of separation, but want to know the links between them. By using 
