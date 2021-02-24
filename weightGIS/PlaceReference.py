@@ -307,7 +307,7 @@ class PlaceReference:
             unique_places = list(set([level_relation[index] for level_relation in name_list]))
 
             # Write it out if it doesn't already exist
-            if not Path(self._working_dir, f"Unique_{level}.csv"):
+            if not Path(self._working_dir, f"Unique_{level}.csv").exists():
                 write_csv(self._working_dir, f"Unique_{level}", [level], unique_places)
             else:
                 print(f"Unique_{level} Already exists, skipping")
