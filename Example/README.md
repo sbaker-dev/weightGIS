@@ -9,12 +9,12 @@ This tutorial will show you how to create weights for places over time when thes
 sub-unit population. As an extension, it will also show you how to fix problems that might occur from multiple changes
 occurring to a region that you do not directly observe.  
 
-## 2A Place Reference
-If your dataset has multiple levels, you will probably wish to create a unique place reference over time. In our data
-set we only have data a single level that has been pre-formatted. However, weighted data requires that all names for a 
-single district be standardised so you may need to learn how to do this for your own data-sets. This will walk you 
-through a hypothetical on how to do it. 
-
+## 2 Place Reference
+If your dataset has multiple levels, you will probably wish to create a unique place reference over time. Even if your
+data set does not, you will need to go through this step as the output file is required in the next one. However, given
+our data set is only at a single level, the output that is used in the next steps will not be generate from this in 
+this case. 
+ 
 ###### todo we need to move Formatting into weightGIS
 
 ## 3 Weighting external data
@@ -25,5 +25,5 @@ re-construct it into a SQL data base
 ## 4 SQL Parser
 This will show you how to use SQL to parse your data out of your database based on the formatting we used in tutorial 3.
 
- 
+###### todo We then need to add creating the geo look (within relational examples) and then add ID assignment  
 
