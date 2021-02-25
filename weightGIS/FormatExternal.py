@@ -51,8 +51,8 @@ class FormatExternal:
         """
 
         # Isolate the place types within the reference file
-        reference_types = [header for header in self._reference.headers if "GID" not in header and "Alt" not in header]
-        reference_types = [header.split("_Name")[0] for header in reference_types]
+        reference_types = [header for header in self._reference.headers
+                           if "GID" not in header and not self.has_numbers(header)]
 
         # Set the indexes for each area
         type_indexes = [[index for index, header in enumerate(self._reference.headers) if area in header]
@@ -63,6 +63,15 @@ class FormatExternal:
             validation.append([place[0]] + [self._place_type_names(place, place_type) for place_type in type_indexes])
 
         return validation, ["GID"] + reference_types
+
+    @staticmethod
+    def has_numbers(string):
+        """
+        Check to see if the string as a digit within it
+
+        Source: https://stackoverflow.com/questions/19859282/check-if-a-string-contains-a-number
+        """
+        return any(char.isdigit() for char in string)
 
     def _place_type_names(self, place, indexes):
         """
