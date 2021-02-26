@@ -266,7 +266,7 @@ class PlaceReference:
     @staticmethod
     def _set_name(record, indexes):
         """Set the name of a place via indexing the records of the shapefile"""
-        return "".join([rec for i, rec in enumerate(record) if i in indexes])
+        return "".join([str(rec) for i, rec in enumerate(record) if i in indexes])
 
     def write_linked_unique(self, ambiguity=True, ambiguity_file_name="SetAmbiguous.csv"):
         """
