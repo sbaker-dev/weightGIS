@@ -20,7 +20,7 @@ class FormatExternal:
         self._cpu_cores = cpu_cores
 
         # Match lists to standardise names to, set the number of match types, -1 is from removing GID
-        self._matcher, self._reference_types = self._construct_match_list()
+        self._matcher, self._reference_types, self.isolates = self._construct_match_list()
         self._match_types = len(self._matcher[0]) - 1
 
         # If there is a correction file, validate it exists, then load it; else None.
@@ -52,20 +52,23 @@ class FormatExternal:
 
         # Isolate the place types within the reference file
         reference_types = [header for header in self._reference.headers
-                           if "GID" not in header and not self.has_numbers(header)]
+                           if "GID" not in header and not self._has_numbers(header)]
 
         # Set the indexes for each area
         type_indexes = [[index for index, header in enumerate(self._reference.headers) if area in header]
                         for area in reference_types]
 
+        # Construct validation lookup
         validation = []
         for place in self._reference.row_data:
             validation.append([place[0]] + [self._place_type_names(place, place_type) for place_type in type_indexes])
 
-        return validation, ["GID"] + reference_types
+        # Isolate the min values for each category
+        isolates = [self._reference.headers.index("GID")] + [min(i) for i in type_indexes]
+        return validation, ["GID"] + reference_types, isolates
 
     @staticmethod
-    def has_numbers(string):
+    def _has_numbers(string):
         """
         Check to see if the string as a digit within it
 
@@ -518,3 +521,30 @@ class FormatExternal:
         except KeyError:
             master_database[assign_name] = {}
             return []
+
+    def places_into_dates(self, cleaned_data, write_directory, file_gid=0):
+        """
+        Sometimes you may have data that is not missing in dates, but just wasn't recorded. This places every place in
+        into ever date.
+        """
+
+        # Format the reference into lower case
+        formatted = [[r.lower() for r in row] for row in self._reference.row_data]
+
+        for file in directory_iterator(cleaned_data):
+            # Load the file as a csv object
+            loaded_file = CsvObject(Path(cleaned_data, file))
+
+            # Isolate the GID: Row relation from the file
+            gid = {row[file_gid]: row for row in loaded_file.row_data}
+
+            # If the place exists in our file, use the file row, else use set to zero's
+            all_places = []
+            for row in formatted:
+                if row[file_gid] in gid:
+                    all_places.append(gid[row[file_gid]])
+                else:
+                    all_places.append([row[i] for i in self.isolates] + [0, 0, 0, 0])
+
+            write_csv(write_directory, loaded_file.file_name, loaded_file.headers, all_places)
+
