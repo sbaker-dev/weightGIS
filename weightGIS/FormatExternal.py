@@ -546,5 +546,5 @@ class FormatExternal:
                 else:
                     all_places.append([row[i] for i in self.isolates] + [0, 0, 0, 0])
 
-            write_csv(write_directory, loaded_file.file_name, loaded_file.headers, all_places)
+            write_csv(write_directory, Path(cleaned_data, file).stem, loaded_file.headers, all_places)
 
