@@ -1,10 +1,22 @@
 from miscSupports import flatten, terminal_time
 
 
-def access_weighted(data_extraction_set, data_requested, name_index=0):
+def access_weighted(data_extraction_set, data_requested):
     """
-    This will use a set of keys provided by the user within data_requested to access and write out the data in a
-    weighted manner
+    This will use a set of keys to extract data from a weightGIS json database so that i can be written out or used in
+    applications or processes.
+
+    Note
+    -----
+    This requires the json dict to follow the weightGIS v0.9 or above json format of the following for each entry:
+
+    gid__place: {attribute1: {date1:value1 ... dateN:valueN} ... attributeN: {date1:value1 ... dateN:valueN}
+
+    :param data_extraction_set: The loaded json database
+    :type data_extraction_set: dict
+
+    :param data_requested: The attributes you would like to extract from each place
+    :type data_requested: list
 
     """
     all_dates = []
@@ -17,12 +29,12 @@ def access_weighted(data_extraction_set, data_requested, name_index=0):
     row_data = []
     for place, attributes in zip(data_extraction_set.keys(), data_extraction_set.values()):
 
-        # Whilst the first element is likely an ID, we may want to extract another index instead
-        place = place.split("__")[name_index]
+        # The place name will be a gid__place which we want to extract here
+        gid, place = place.split("__")
 
         # Then for each date we setup our first two columns of place-date
         for date in common_dates:
-            date_values = [place, date]
+            date_values = [gid, place, date]
 
             # And for each attribute requested, we extract the value if the date is valid, else NA
             for attr in data_requested:
