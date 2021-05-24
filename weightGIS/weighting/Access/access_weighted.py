@@ -30,7 +30,8 @@ def access_weighted(data_extraction_set, data_requested):
     for place, attributes in zip(data_extraction_set.keys(), data_extraction_set.values()):
 
         # The place name will be a gid__place which we want to extract here
-        gid, place = place.split("__")
+        place_names = place.split("__")
+        gid, place = place_names[0], "_".join([p for i, p in enumerate(place_names) if i != 0])
 
         # Then for each date we setup our first two columns of place-date
         for date in common_dates:
