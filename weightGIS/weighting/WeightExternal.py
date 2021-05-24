@@ -326,6 +326,6 @@ class WeightExternal:
 
         # Return them if they are all ints or floats, else return NA
         if all(isinstance(v, (int, float)) for v in weighted_values):
-            return sum(values)
+            return sum(weighted_values)
         else:
             return "NA"
