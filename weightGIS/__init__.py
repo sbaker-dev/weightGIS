@@ -1,7 +1,6 @@
 
 # Access methods of outputted weighted external data
 from weightGIS.weighting.Access.access_weighted import access_weighted
-from weightGIS.weighting.Access.SQLParser import SQLParser
 
 # Weighting Methods for creating weights and using them to weight external data
 from weightGIS.weighting.ConstructWeights import ConstructWeights
