@@ -21,13 +21,19 @@ def access_weighted(data_extraction_set, data_requested):
     """
     all_dates = []
     for place, attributes in zip(data_extraction_set.keys(), data_extraction_set.values()):
-        all_dates.append(
-            flatten([list(attributes[data].keys()) for data in data_requested if data in attributes.keys()]))
+        place_dates = []
+
+        # Isolate each elements keys, which should be the dates, as long as the data exists and is a dict
+        for data in data_requested:
+            if data in attributes.keys() and isinstance(attributes[data], dict):
+                place_dates.append(list(attributes[data].keys()))
+
+        all_dates.append(flatten(place_dates))
 
     common_dates = sorted(list(set(flatten(all_dates))))
 
     row_data = []
-    for place, attributes in zip(data_extraction_set.keys(), data_extraction_set.values()):
+    for place, d_attr in zip(data_extraction_set.keys(), data_extraction_set.values()):
 
         # The place name will be a gid__place which we want to extract here
         place_names = place.split("__")
@@ -39,8 +45,8 @@ def access_weighted(data_extraction_set, data_requested):
 
             # And for each attribute requested, we extract the value if the date is valid, else NA
             for attr in data_requested:
-                if (attr in attributes.keys()) and (date in attributes[attr].keys()):
-                    date_values.append(attributes[attr][date])
+                if (attr in d_attr.keys()) and (isinstance(d_attr[attr], dict) and (date in d_attr[attr].keys())):
+                    date_values.append(d_attr[attr][date])
                 else:
                     date_values.append("NA")
             row_data.append(date_values)
