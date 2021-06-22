@@ -1,4 +1,4 @@
-from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json, load_json
+from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json, load_json, load_yaml, validate_path
 from csvObject import CsvObject, write_csv
 from multiprocessing import Process
 from pathlib import Path
@@ -548,3 +548,77 @@ class FormatExternal:
 
             write_csv(write_directory, Path(cleaned_data, file).stem, loaded_file.headers, all_places)
 
+    def reformat_raw_names(self, raw_csv, raw_name_i, ref_c_name, out_directory, data_start, date_i,
+                           yaml_correction=None, ref_gid=0, ref_d_name=1):
+
+        if yaml_correction:
+            yaml_correction = load_yaml(validate_path(yaml_correction))
+
+        raw_csv = CsvObject(raw_csv)
+        headers = ["GID", "District", "County"] + raw_csv.headers[data_start:]
+
+        place_dict = self.create_place_dict(raw_csv, raw_name_i, ref_gid, ref_d_name, ref_c_name, yaml_correction)
+
+        # todo Need to acount for different date styles to format as yyyymmdd
+        unique_dates = sorted(list(set([row[date_i] for row in raw_csv.row_data])))
+
+        for date in unique_dates:
+            place_rows = []
+            for row in raw_csv.row_data:
+                if row[date_i] == date:
+                    place_rows.append(place_dict[self._simplify_string(row[1])] + row[data_start:])
+
+            write_csv(out_directory, date, headers, place_rows)
+
+    def create_place_dict(self, raw_csv, name_i, ref_gid, ref_d_name, ref_c_name, yaml_correction):
+        """
+        Names from the town level data are not linkable to districts, attempt to do so via this method.
+        """
+
+        # Isolate unique names
+        unique_names = sorted(list(set(raw_csv[name_i])))
+
+        search_names = [self._simplify_string(name) for name in self._reference[1]]
+
+        place_dict = {}
+        for place in unique_names:
+
+            place = self._simplify_string(place)
+            print(place)
+
+            place_names = [name for name in search_names if place == name]
+
+            # If we fail to find a single name
+            if len(place_names) < 1 or len(place_names) > 1:
+
+                # Try to find a unique name from alternatives
+                place_reformatted = self._search_alternate(place, ref_gid, ref_d_name, ref_c_name)
+
+                # If we fail
+                if not place_reformatted:
+                    # Try to load a correction from the yaml file
+                    try:
+                        row_id = self._reference[ref_gid].index(str(yaml_correction[place]))
+                        data_row = self._reference.row_data[row_id]
+                        place_reformatted = [data_row[ref_gid], data_row[ref_d_name], data_row[ref_c_name]]
+
+                    # Otherwise push failed name to terminal
+                    except KeyError:
+                        raise KeyError(F"No correction for unknown {place}")
+
+            # If we do find a unique name, isolate the gid, district, county
+            else:
+                data_row = self._reference.row_data[search_names.index(place_names[0])]
+                place_reformatted = [data_row[ref_gid], data_row[ref_d_name], data_row[ref_c_name]]
+
+            place_dict[place] = place_reformatted
+
+        return place_dict
+
+    def _search_alternate(self, place, gid, d_name, c_name):
+        """If we fail to identify a single name, look for alternative names"""
+        for row in self._reference.row_data:
+            for name in row:
+                name = self._simplify_string(name)
+                if place in name:
+                    return [row[gid], row[d_name], row[c_name]]
