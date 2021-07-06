@@ -1,5 +1,5 @@
 from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json, load_json, validate_path, \
-    invert_dates
+    invert_dates, flatten, parse_as_numeric
 from csvObject import CsvObject, write_csv
 from multiprocessing import Process
 from pathlib import Path
@@ -306,7 +306,8 @@ class FormatExternal:
                 row_names = data.row_data[data.column_data[0].index(dup)][:len(self._reference_types)]
 
                 # Isolate the values for each duplicate name
-                sub_list = [[float(rr) for rr in r[len(self._reference_types):]] for r in data.row_data if dup == r[0]]
+                sub_list = [[parse_as_numeric(rr, float) for rr in r[len(self._reference_types):]]
+                            for r in data.row_data if dup == r[0]]
 
                 # Isolate unique lists, to remove duplicates
                 unique_sub_lists = [list(x) for x in set(tuple(x) for x in sub_list)]
