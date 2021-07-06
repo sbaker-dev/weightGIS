@@ -21,7 +21,7 @@ class FormatExternal:
 
         # Match lists to standardise names to, set the number of match types, -1 is from removing GID
         self._matcher, self._reference_types, self.isolates = self._construct_match_list()
-        self.gid, self.did, self.cid = self.isolates
+        self._gid, self._did, self._cid = self.isolates
         self._match_types = len(self._matcher[0]) - 1
 
         # If there is a correction file, validate it exists, then load it; else None.
@@ -581,7 +581,7 @@ class FormatExternal:
         raw_csv = CsvObject(raw_csv, set_columns=True)
         headers = ["Place"] + raw_csv.headers[data_start:]
 
-        place_dict = self.create_place_dict(raw_csv, raw_name_i)
+        place_dict = self._create_place_dict(raw_csv, raw_name_i)
 
         unique_dates = self._set_name_dates(date_delimiter, date_i, date_type, raw_csv)
 
@@ -593,7 +593,7 @@ class FormatExternal:
 
             write_csv(out_directory, date, headers, place_rows)
 
-    def create_place_dict(self, raw_csv, name_i):
+    def _create_place_dict(self, raw_csv, name_i):
         """
         Names from the town level data are not linkable to districts, attempt to do so via this method.
         """
@@ -637,7 +637,7 @@ class FormatExternal:
             # If we do find a unique name, isolate the gid, district, county
             else:
                 data_row = self._reference.row_data[search_names.index(place_names[0])]
-                place_reformatted = f"{data_row[self.cid]}__{data_row[self.did]}"
+                place_reformatted = f"{data_row[self._cid]}__{data_row[self._did]}"
 
             place_dict[place] = place_reformatted
 
@@ -649,7 +649,7 @@ class FormatExternal:
             for name in row:
                 name = self._simplify_string(name)
                 if place in name:
-                    return f"{row[self.cid]}__{row[self.did]}"
+                    return f"{row[self._cid]}__{row[self._did]}"
 
     def _attempt_correction(self, place):
         """
