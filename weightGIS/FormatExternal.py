@@ -548,77 +548,161 @@ class FormatExternal:
 
             write_csv(write_directory, Path(cleaned_data, file).stem, loaded_file.headers, all_places)
 
-    def reformat_raw_names(self, raw_csv, raw_name_i, ref_c_name, out_directory, data_start, date_i,
-                           yaml_correction=None, ref_gid=0, ref_d_name=1):
+    def reformat_raw_names(self, raw_csv, raw_name_i, date_i, data_start, out_directory, date_type="yyyymmdd",
+                           date_delimiter="/"):
+        """
+        This will attempt to reformat names that are in a different style to the required weightGIS format
 
-        if yaml_correction:
-            yaml_correction = load_yaml(validate_path(yaml_correction))
+        :param raw_csv: The path of the csv of data you want to standardise
+        :type raw_csv: Path | str
 
-        raw_csv = CsvObject(raw_csv)
-        headers = ["GID", "District", "County"] + raw_csv.headers[data_start:]
+        :param raw_name_i: The place name index in the raw file
+        :type raw_name_i: int
 
-        place_dict = self.create_place_dict(raw_csv, raw_name_i, ref_gid, ref_d_name, ref_c_name, yaml_correction)
+        :param date_i: The date index in the raw file
+        :type date_i: int
 
-        # todo Need to acount for different date styles to format as yyyymmdd
-        unique_dates = sorted(list(set([row[date_i] for row in raw_csv.row_data])))
+        :param data_start: The column index wherein after the data starts
+        :type data_start: int
 
-        for date in unique_dates:
+        :param out_directory: Where you want this file to be written to
+        :type out_directory: str | Path
+
+        :param date_type: The type of date, takes the values of yyyy, yyyymmdd, or ddmmyyyy.
+        :type date_type: str
+
+        :param date_delimiter: Delimiter for if dates are standard dd/mm/yyyy
+        :type date_delimiter: str
+
+        :return:
+        """
+
+        raw_csv = CsvObject(raw_csv, set_columns=True)
+        headers = ["Place"] + raw_csv.headers[data_start:]
+
+        place_dict = self.create_place_dict(raw_csv, raw_name_i)
+
+        unique_dates = self._set_name_dates(date_delimiter, date_i, date_type, raw_csv)
+
+        for row_date, date in unique_dates.items():
             place_rows = []
             for row in raw_csv.row_data:
-                if row[date_i] == date:
-                    place_rows.append(place_dict[self._simplify_string(row[1])] + row[data_start:])
+                if row[date_i] == row_date:
+                    place_rows.append([place_dict[self._simplify_string(row[raw_name_i])]] + row[data_start:])
 
             write_csv(out_directory, date, headers, place_rows)
 
-    def create_place_dict(self, raw_csv, name_i, ref_gid, ref_d_name, ref_c_name, yaml_correction):
+    def create_place_dict(self, raw_csv, name_i):
         """
         Names from the town level data are not linkable to districts, attempt to do so via this method.
         """
 
-        # Isolate unique names
+        # Isolate unique names and simplify them for matching
         unique_names = sorted(list(set(raw_csv[name_i])))
-
         search_names = [self._simplify_string(name) for name in self._reference[1]]
 
         place_dict = {}
         for place in unique_names:
 
+            # Create a simplified reference of this place
             place = self._simplify_string(place)
-            print(place)
 
+            # Search for the place name in the search names
             place_names = [name for name in search_names if place == name]
 
             # If we fail to find a single name
             if len(place_names) < 1 or len(place_names) > 1:
 
                 # Try to find a unique name from alternatives
-                place_reformatted = self._search_alternate(place, ref_gid, ref_d_name, ref_c_name)
+                place_reformatted = self._search_alternate(place)
 
                 # If we fail
                 if not place_reformatted:
                     # Try to load a correction from the yaml file
                     try:
-                        row_id = self._reference[ref_gid].index(str(yaml_correction[place]))
-                        data_row = self._reference.row_data[row_id]
-                        place_reformatted = [data_row[ref_gid], data_row[ref_d_name], data_row[ref_c_name]]
+                        # Create a place_reformatted if not flagged for deletion
+                        corrected_place = self._attempt_correction(place)
+                        if not corrected_place:
+                            continue
+                        else:
+                            place_reformatted = self._search_alternate(corrected_place)
+                            if not place_reformatted:
+                                raise IndexError(f"Failed to find {place}")
 
                     # Otherwise push failed name to terminal
-                    except KeyError:
+                    except (KeyError, TypeError):
                         raise KeyError(F"No correction for unknown {place}")
 
             # If we do find a unique name, isolate the gid, district, county
             else:
                 data_row = self._reference.row_data[search_names.index(place_names[0])]
-                place_reformatted = [data_row[ref_gid], data_row[ref_d_name], data_row[ref_c_name]]
+                place_reformatted = f"{data_row[self.cid]}__{data_row[self.did]}"
 
             place_dict[place] = place_reformatted
 
         return place_dict
 
-    def _search_alternate(self, place, gid, d_name, c_name):
+    def _search_alternate(self, place):
         """If we fail to identify a single name, look for alternative names"""
         for row in self._reference.row_data:
             for name in row:
                 name = self._simplify_string(name)
                 if place in name:
-                    return [row[gid], row[d_name], row[c_name]]
+                    return f"{row[self.cid]}__{row[self.did]}"
+
+    def _attempt_correction(self, place):
+        """
+        If we have failed to find the name, then it may be that this name requires correcting first. This iterates
+        though looking for corrections on the first name and then returns the correction if the flag is not set to
+        True, which indicates a deletion.
+
+        :param place: Correct place we failed to find
+        :type place: str
+
+        :return: A correction if we found it and it was not set to be deleted, else None
+        :rtype: str | None
+
+        :raises IndexError: If the place was not found
+        """
+
+        for (error_district, error_county), (correction_district, correction_county), flag in self._corrections:
+            if place == error_district:
+                if flag == "FALSE":
+                    return correction_district
+                else:
+                    return None
+
+        raise IndexError(f"Failed to Find a correction for {place}")
+
+    @staticmethod
+    def _set_name_dates(date_delimiter, date_i, date_type, raw_csv):
+        """
+        This will attempt to standardise the date column into a yyyymmdd date
+
+        :param date_delimiter: Delimiter for if dates are standard dd/mm/yyyy
+        :type date_delimiter: str
+
+        :param date_i: Index for the date in the raw data
+        :type date_i: int
+
+        :param date_type: The type of date, takes the values of yyyy, yyyymmdd, or ddmmyyyy.
+        :type date_type: str
+
+        :param raw_csv: The raw csv
+        :type raw_csv: CsvObject
+
+        :return: A dict of {row date name: yyyymmdd}
+        :rtype: dict
+
+        :raises TypeError: If a value other than yyyy, yyyymmdd, or ddmmyyyy is passed to date_type
+        """
+
+        unique_dates = sorted(list(set([row[date_i] for row in raw_csv.row_data])))
+        if date_type == "yyyy":
+            return {date: f"{date}1231" for date in unique_dates}
+        elif date_type == "yyyymmdd":
+            return {date: date for date in unique_dates}
+        elif date_type == "ddmmyyyy":
+            return {date: inv for date, inv in zip(unique_dates, invert_dates(unique_dates, date_delimiter))}
+        else:
+            raise TypeError(f"Expected yyyy, yyyymmdd, or ddmmyyyy yet was passed {date_type}")
