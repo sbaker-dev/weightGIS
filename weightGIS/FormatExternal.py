@@ -1,4 +1,5 @@
-from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json, load_json, load_yaml, validate_path
+from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json, load_json, validate_path, \
+    invert_dates
 from csvObject import CsvObject, write_csv
 from multiprocessing import Process
 from pathlib import Path
@@ -10,8 +11,7 @@ class FormatExternal:
     def __init__(self, place_reference, data_name, correction_path=None, cpu_cores=1, splitter="__", name_index=0,
                  place_map=None):
         # Set the standardised name reference from a path to its csv
-        assert Path(place_reference), "Path to place reference not valid"
-        self._reference = CsvObject(place_reference)
+        self._reference = CsvObject(validate_path(place_reference), set_columns=True)
 
         # The name for this particular sub set of data
         self._data_name = data_name
@@ -21,6 +21,7 @@ class FormatExternal:
 
         # Match lists to standardise names to, set the number of match types, -1 is from removing GID
         self._matcher, self._reference_types, self.isolates = self._construct_match_list()
+        self.gid, self.did, self.cid = self.isolates
         self._match_types = len(self._matcher[0]) - 1
 
         # If there is a correction file, validate it exists, then load it; else None.
@@ -124,8 +125,7 @@ class FormatExternal:
         """
 
         # Load the data into memory
-        assert Path(correction_path).exists(), "Path to corrections not valid"
-        correction_data = CsvObject(correction_path)
+        correction_data = CsvObject(validate_path(correction_path))
 
         # Assert there are as many rows as twice the number of types, + 1 for the operator column
         assert (self._match_types * 2) + 1 == correction_data.row_length
