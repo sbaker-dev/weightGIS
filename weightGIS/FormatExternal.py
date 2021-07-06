@@ -2,6 +2,7 @@ from miscSupports import directory_iterator, find_duplicates, chunk_list, write_
     invert_dates, flatten, parse_as_numeric
 from csvObject import CsvObject, write_csv
 from multiprocessing import Process
+from collections import Counter
 from pathlib import Path
 import numpy as np
 import re
@@ -707,3 +708,114 @@ class FormatExternal:
             return {date: inv for date, inv in zip(unique_dates, invert_dates(unique_dates, date_delimiter))}
         else:
             raise TypeError(f"Expected yyyy, yyyymmdd, or ddmmyyyy yet was passed {date_type}")
+
+    @staticmethod
+    def remove_duplicates(raw_csv, write_directory):
+        """
+        Sometimes we may have known duplicates in a file which does not link to ambiguity, in this case we can just
+        purge the duplicates and re-write the file
+
+        :param raw_csv: The csv with potential duplicates within them
+        :type raw_csv: str | Path
+
+        :param write_directory: The output directory for the file
+        :type write_directory: Path | str
+
+        :return: Nothing, write file then stop
+        :rtype: None
+        """
+
+        csv_obj = CsvObject(validate_path(raw_csv))
+        unique_values = [list(v) for v in list(Counter([tuple(r) for r in csv_obj.row_data]).keys())]
+        write_csv(write_directory, csv_obj.file_path.stem, csv_obj.headers, unique_values)
+
+    def combine(self, unique_id, data_start, root_directory, write_directory, write_name):
+        """
+        weightGIS expects each file to have a single date, so if you have lots of files of the same date that you wan
+        to process at the same time you will need ot combine them
+
+        :param unique_id: The unique id index
+        :type unique_id: int
+
+        :param data_start: The index wherein the data starts from
+        :type data_start: int
+
+        :param root_directory: The root directory of the csv files
+        :type root_directory: Path | str
+
+        :param write_directory: The output directory for the file
+        :type write_directory: Path | str
+
+        :param write_name: Name of the combined file
+        :type write_name: str
+
+        :return: Nothing, write file then stop
+        :rtype: None
+        """
+
+        # Create the unique ID's
+        unique_id_list = sorted(list(set(flatten([CsvObject(Path(root_directory, file), set_columns=True)[unique_id]
+                                                 for file in directory_iterator(root_directory)]))))
+
+        # For each unique ID
+        out_list = []
+        for count_i, ids in enumerate(unique_id_list):
+
+            if count_i % 10 == 0:
+                print(f"{count_i} / {len(unique_id_list)}")
+
+            # Check each file for a matching row, and then
+            ids_list = []
+            for index, file in enumerate(directory_iterator(root_directory)):
+
+                # If its the first index, take the full values
+                if index == 0:
+                    ids_list += self._isolate(root_directory, file, unique_id, ids)
+
+                # Otherwise only take the values after the data start
+                else:
+                    ids_list += self._isolate(root_directory, file, unique_id, ids)[data_start:]
+
+            out_list.append(ids_list)
+
+        headers = []
+        for index, file in enumerate(directory_iterator(root_directory)):
+            if index == 0:
+                headers += CsvObject(Path(root_directory, file)).headers
+            else:
+                headers += CsvObject(Path(root_directory, file)).headers[data_start:]
+
+        write_csv(write_directory, write_name, headers, out_list)
+
+    @staticmethod
+    def _isolate(root_directory, file, unique_id, ids):
+        """
+        Isolate the row that match's the ID if it exists, else return an empty list
+
+        Note
+        ----
+        This assumes no duplicates, and if you have duplicates where the values are different you will need to clean
+        that yourself. Otherwise, run the remove_duplicates command first before this method.
+
+        :param root_directory: The root directory of the csv files
+        :type root_directory: Path | str
+
+        :param file: The name of the file to search
+        :type file: str
+
+        :param unique_id: The unique id index
+        :type unique_id: int
+
+        :param ids: The current match id
+        :type ids: str
+
+        :return: The row in the data that was matched if it was found, else an empty list of length CsvObject
+        :rtype: list
+        """
+
+        csv_obj = CsvObject(Path(root_directory, file))
+
+        for row in csv_obj.row_data:
+            if row[unique_id] == ids:
+                return row
+        return ["" for _ in range(csv_obj.row_length)]
