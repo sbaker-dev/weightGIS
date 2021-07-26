@@ -1,0 +1,1 @@
+from exposures import assigned_exposure
