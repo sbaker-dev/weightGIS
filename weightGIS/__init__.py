@@ -9,7 +9,7 @@ from weightGIS.weighting.AssignWeights import AssignWeights
 from weightGIS.weighting.WeightExternal import WeightExternal
 
 # Additional methods that support the main pipeline
-from weightGIS.id_assignment import geo_ref_locate_individuals
+from weightGIS.IDAssignment import IDLocate
 from weightGIS.PlaceReference import PlaceReference
 from weightGIS.FormatExternal import FormatExternal
 from weightGIS.GeoLookup import GeoLookup
