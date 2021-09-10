@@ -4,8 +4,8 @@ from shapely.geometry import Point
 from pathlib import Path
 
 
-def locate_individuals(ids_path, lowest_level_shapefile_path, geo_lookup, east_i, north_i,
-                       shape_match_index, write_directory, write_name):
+def geo_ref_locate_individuals(ids_path, lowest_level_shapefile_path, geo_lookup, east_i, north_i,
+                               shape_match_index, write_directory, write_name):
     """
     This will assist you locating individuals with a geo lookup files
 

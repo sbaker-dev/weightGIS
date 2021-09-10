@@ -6,6 +6,9 @@ from pathlib import Path
 import numpy as np
 import re
 
+# todo: The Final output should really be a yaml file not a csv that way we don't need to do these strand index level
+#  things. 
+
 
 class PlaceReference:
     def __init__(self, working_directory, base_name, level_names, cut_off=100):
