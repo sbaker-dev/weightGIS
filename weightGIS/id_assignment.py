@@ -7,7 +7,8 @@ from pathlib import Path
 def geo_ref_locate_individuals(ids_path, lowest_level_shapefile_path, geo_lookup, east_i, north_i,
                                shape_match_index, write_directory, write_name):
     """
-    This will assist you locating individuals with a geo lookup files
+    This will assist you locating individuals with a geo lookup, so a single low level shapefile can identify all levels
+    within a single loop
 
     :param ids_path: The path to a csv file filled with id's with a eastings and northings
     :type ids_path: Path | str
@@ -51,6 +52,39 @@ def geo_ref_locate_individuals(ids_path, lowest_level_shapefile_path, geo_lookup
     # Link all the geometry
     geo_link = create_geo_link(unique_places, geo_file, geo_lookup, shape_obj, shape_match_index)
 
+    # create the headers for the file, then write the located out
+    headers = [h for i, h in enumerate(id_file.headers) if i not in (east_i, north_i)] + geo_file.headers
+    write_located(east_i, headers, geo_link, id_file, north_i, write_directory, write_name)
+
+
+def write_located(east_i, headers, geo_link, id_file, north_i, write_directory, write_name):
+    """
+    Using the unique linker, write the located individuals to a csv file
+
+    :param east_i: The index of the east coordinate within the id file
+    :type east_i: int
+
+    :param headers: Headers of the csv file
+    :type headers: list[str]
+
+    :param geo_link: The unique dict of {Unique_place: details of that place}
+    :type geo_link: dict
+
+    :param id_file: The ID file
+    :type id_file: CsvObject
+
+    :param north_i: The index of the north coordinate within the id file
+    :type north_i: int
+
+    :param write_directory: The write directory
+    :type write_directory: str | Path
+
+    :param write_name: The write Name of the file
+    :type write_name: str
+
+    :return: Nothing, write the file out to the write directory, called write_name, then stop
+    :rtype: None
+    """
     output_rows = []
     for respondent in id_file.row_data:
         # Isolate the rows that are not east/north
@@ -60,13 +94,90 @@ def geo_ref_locate_individuals(ids_path, lowest_level_shapefile_path, geo_lookup
         birth_location = f"{respondent[east_i]}__{respondent[north_i]}"
         output_rows.append(non_location + geo_link[birth_location])
 
-    headers = [h for i, h in enumerate(id_file.headers) if i not in (east_i, north_i)] + geo_file.headers
     write_csv(write_directory, write_name, headers, output_rows)
+
+
+def locate_individuals(csv_file, shapefile, write_dir, write_name, east_id=1, north_id=2, shp_match=0):
+    """
+    This will locate individuals within a single shapefile
+
+    :param csv_file: The path to the csv file containing the ID easting and northing coordinates
+    :type csv_file: Path | str
+
+    :param shapefile: The path to the shapefile
+    :type shapefile: str | Path
+
+    :param write_dir: The write directory
+    :type write_dir: str | Path
+
+    :param write_name: The write Name of the file
+    :type write_name: str
+
+    :param east_id: Position of the easting column index within the csv file
+    :type east_id: int
+
+    :param north_id: Position of the northings column index within the csv file
+    :type north_id: int
+
+    :param shp_match: The ID to isolate from the shapefile to be used as the identifier
+    :type shp_match: int
+
+    :return: Nothing, write the file out to the write directory, called write_name, then stop
+    :rtype: None
+    """
+    id_file = CsvObject(csv_file)
+    shape_obj = ShapeObject(shapefile)
+
+    # Create a list of unique easting_westing coordinates to avoid unnecessary iteration
+    unique_places = sorted(list(set([f"{respondent[east_id]}__{respondent[north_id]}"
+                                     for respondent in id_file.row_data])))
+
+    id_link = link_unique(unique_places, shape_obj, shp_match)
+
+    write_located(east_id, ["ID", "GID"], id_link, id_file, north_id, write_dir, write_name)
+
+
+def link_unique(unique_places, shape_obj, shp_match):
+    """
+    For each unique place, this will locate where this point is with the shapefile if it exists, else sets entry to
+    "No or invalidate coordinates"
+
+    :param unique_places: The unique list of places
+    :type unique_places: list[str]
+
+    :param shape_obj: The shapefile to locate within
+    :type shape_obj: ShapeObject
+
+    :param shp_match: The match index to the record within this place you want to use as an identifier
+    :type shp_match: int
+
+    :return: A dict, containing {Unique_place: ShapeFileIdentifier}
+    :rtype: dict
+    """
+
+    geo_link = {}
+    # Determine the location of each place
+    for index, coordinate in enumerate(unique_places):
+        if index % 100 == 0:
+            print(f"{index + 1}/{len(unique_places)}")
+
+        # Isolate the two coordinates
+        east, north = coordinate.split("__")
+
+        if len(east) == 0 or len(north) == 0:
+            geo_link[coordinate] = ["No or invalid coordinates"]
+        else:
+            point = Point(float(east), float(north))
+            geo_link[coordinate] = [point_identification(shape_obj, point, shp_match)]
+
+    return geo_link
 
 
 def create_geo_link(unique_places, geo_file, geo_lookup, shape_obj, shape_match_index):
     """
-    This will iterate each unique place, and determine where the point is based on the geo lookup
+    This will iterate each unique place, and determine where the point is within the lowest level shapefile.
+    Then it will link this shapefile's `shape_match_index` within the geo lookup so that all layers that are associate
+    with this unique place are linked at once
 
     :param unique_places: A list of unique places eastings and northings that have been put in a string with a __
         delimiter
@@ -140,4 +251,3 @@ def point_identification(shapefile, point, shape_match_index):
         return str(sorted(lowest_list)[0][1])
     except KeyError:
         return "None"
-
