@@ -127,7 +127,7 @@ class ConstructWeights:
         :param base_shape: The current shape in the base shapefile we are indexing too
         :type base_shape: Polygon | MultiPolygon
 
-        :param area_weight: The currently calculated values from the are weights
+        :param area_weight: The currently calculated values from the area weights
         :type area_weight: list[list[int, str, float, Polygon | MultiPolygon]]
 
         :return: A list of lists, where each sub list is composed of the overlap id, name, area weight, and sub unit
@@ -171,7 +171,7 @@ class ConstructWeights:
             sub_unit_file, within_search_polygon, weight_index)
 
         weighted_set = [self._select_under(poly, sub_shape_polygons, record_list, sub_units) for poly in current_shape]
-        weight = sum([area for area, _ in flatten(weighted_set)])
+        weight = sum([population_weight for population_weight, _ in flatten(weighted_set)])
         return weight, weighted_set
 
     def _configure_sub_shapes(self, sub_unit_file, within_search_polygon, weight_index):
@@ -296,6 +296,7 @@ class ConstructWeights:
 
         weighted_polygons = []
         for i, (rec_index, poly) in enumerate(polygons_to_weight):
+            # The population is weighted based on the % area of the zone within the zone
             weight = float(record_list[rec_index]) * (poly.area / sub_units[rec_index].area)
             weighted_polygons.append([weight, poly])
         return weighted_polygons
