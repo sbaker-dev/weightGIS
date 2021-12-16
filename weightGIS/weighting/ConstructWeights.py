@@ -3,7 +3,7 @@ from weightGIS.Errors import BaseNameNotFound, NoSubUnitWeightIndex
 from miscSupports import flatten, multi_to_poly, directory_iterator, validate_path, write_json
 from shapely.geometry import LineString, Polygon, MultiPolygon, GeometryCollection
 from shapely.ops import split as shp_split
-from typing import List, Union, Optional, Tuple
+from typing import List, Union, Optional, Tuple, Dict
 from shapeObject import ShapeObject
 from pathlib import Path
 import re
@@ -75,46 +75,43 @@ class ConstructWeights:
         """
         base_weights = {f"{rec[self._gid]}__{self._construct_name(rec)}": [] for rec in self.base.records}
         for c, (shape, record) in enumerate(zip(self.base.polygons, self.base.records)):
-            print(f"{c+1} / {len(self.base.polygons)}")
+            print(f"{c + 1} / {len(self.base.polygons)}")
 
             match_weights = {file: [] for file in [re.sub(r'\D', "", file.file_name) for file in self.shapefiles]}
             for index, match_shape_file in enumerate(self.shapefiles):
 
                 # Set the weight from overlapping area
-                area_weight = self._polygon_area_weights(shape, match_shape_file)
+                weights = self._polygon_area_weights(shape, match_shape_file)
 
                 # If set, set the weight from underling sub unit population
                 if self.sub_units:
-                    weights = self._sub_weight(shape, area_weight)
-                else:
-                    weights = [area[:-1] for area in area_weight]
+                    weights = {gid: self._sub_weight(shape, overlap_values) for gid, overlap_values in weights.items()}
+
                 match_weights[re.sub(r'\D', "", match_shape_file.file_name)] = weights
+            base_weights[f"{record[self._gid]}__{self._construct_name(record)}"] = match_weights
 
-            base_weights[f"{record[self._gid]}__{self._construct_name(record)}"] = self._format_weights(match_weights)
+            print(match_weights)
+        # write_json(base_weights, self._working_dir, write_name)
 
-        write_json(base_weights, self._working_dir, write_name)
-
-    def _polygon_area_weights(self, current_shape, match_shape_file):
+    def _polygon_area_weights(self, current_shape: Union[Polygon, MultiPolygon], match_shape_file: ShapeObject) -> dict:
         """
-        Calculates the weights relative to the base year in terms of area
-
-        :param current_shape: The Current polygonal shape from our base shapefile
-        :type current_shape: Polygon | MultiPolygon
-
-        :param match_shape_file: The current shapefile that is being based
-        :type match_shape_file: ShapeObject
-
-        :return: A list of lists, where each sub list is a list of the found overlap ID, Name, Area Weight, Polygon.
-        :rtype: list[list[int, str, float, Polygon | MultiPolygon]]
+        Calculates the weights relative to the base years current_shape in terms of area for each shape in the
+        match_shape_file which has an overlap
         """
-        area_weights = []
-        for match_shape, record in zip(match_shape_file.polygons, match_shape_file.records):
-            overlap_area = current_shape.intersection(match_shape).area
-            if overlap_area > self._cut_off:
-                overlap_percentage = (overlap_area / match_shape.area) * 100
-                area_weights.append([record[self._gid], self._construct_name(record), overlap_percentage, match_shape])
+        area_weights = {record[self._gid]: self._calculate_area_weight(current_shape, match_shape, record)
+                        for match_shape, record in zip(match_shape_file.polygons, match_shape_file.records)}
+        return {gid: weights for gid, weights in area_weights.items() if weights}
 
-        return area_weights
+    def _calculate_area_weight(self, current_shape: Union[Polygon, MultiPolygon],
+                               match_shape: Union[Polygon, MultiPolygon], record: List[str]):
+        """
+        If the overlap is greater than the cut off, return a dict with Name, Area Weight, Population Stub, and
+        Match Shape
+        """
+        overlap_area = current_shape.intersection(match_shape).area
+        if overlap_area > self._cut_off:
+            return {'Name': self._construct_name(record), 'Area': (overlap_area / match_shape.area) * 100,
+                    'Population': None, 'Match': match_shape}
 
     def _construct_name(self, record: List[str]) -> str:
         """
@@ -122,7 +119,7 @@ class ConstructWeights:
         """
         return "_".join([record[i] for i in self._name_indexes])
 
-    def _sub_weight(self, base_shape, area_weight):
+    def _sub_weight(self, base_shape: Union[Polygon, MultiPolygon], overlap_values: dict):
         """
         Calculates and returns the sub unit weight for each overlapping shape
 
@@ -131,29 +128,17 @@ class ConstructWeights:
         value of the sub weight value. Then, the parts of this shape that overlap the base_shape we are indexing too
         are isolated. The percentage weight is then just the value of (weight_of_match / weight_of_base) * 100.
 
-        :param base_shape: The current shape in the base shapefile we are indexing too
-        :type base_shape: Polygon | MultiPolygon
-
-        :param area_weight: The currently calculated values from the area weights
-        :type area_weight: list[list[int, str, float, Polygon | MultiPolygon]]
-
-        :return: A list of lists, where each sub list is composed of the overlap id, name, area weight, and sub unit
-            weight
-        :rtype: list[list[int, str, float, float]]
         """
-        reformatted_weights = []
-        for place_key, place_name, overlap_percentage, overlap in area_weight:
-            if int(overlap_percentage) != 100:
-                weight_of_match, weighted_set = self._sub_unit_weight(self.sub_units, overlap, self._weight_index)
-                weight_of_base, weighted_set = self._sub_unit_weight(flatten(weighted_set), base_shape, None)
+        if overlap_values['Area'] != 100:
+            weight_of_match, weighted_set = self._sub_unit_weight(self.sub_units, overlap_values['Match'],
+                                                                  self._weight_index)
+            weight_of_base, weighted_set = self._sub_unit_weight(flatten(weighted_set), base_shape, None)
 
-                sub_unit_weight = (weight_of_base / weight_of_match) * 100
-                reformatted_weights.append([place_key, place_name, overlap_percentage, sub_unit_weight])
-
-            else:
-                reformatted_weights.append([place_key, place_name, overlap_percentage, 100.0])
-
-        return reformatted_weights
+            overlap_values['Population'] = (weight_of_base / weight_of_match) * 100
+        else:
+            overlap_values['Population'] = 100
+        overlap_values.pop('Match', None)
+        return overlap_values
 
     def _sub_unit_weight(self, sub_unit_file, within_search_polygon, weight_index):
         """
@@ -384,22 +369,3 @@ class ConstructWeights:
             return poly_list
         else:
             return [record_index, split_poly]
-
-    def _format_weights(self, weights):
-        """
-        Now we have lists of data, but we want to structure these lists into dictionarys so we can parse the information
-        quickly and also have the data have a greater level of human readability
-        """
-        return {key: self._set_format(place_weights) for key, place_weights in zip(weights.keys(), weights.values())}
-
-    def _set_format(self, weights):
-        """
-        If we only have area weights, then we won't have the same number of data points and will lead to an unexpected
-        unpacking error. So we use the existence of sub units to determine the data that is written out
-        """
-
-        if self.sub_units:
-            return {f"{gid}__{place}": {"Area": area, "Population": population}
-                    for gid, place, area, population in weights}
-        else:
-            return {f"{gid}__{place}": {"Area": area} for gid, place, area in weights}
