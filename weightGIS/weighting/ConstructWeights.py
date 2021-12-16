@@ -1,56 +1,77 @@
+from weightGIS.Errors import BaseNameNotFound, NoSubUnitWeightIndex
+
+from miscSupports import flatten, multi_to_poly, directory_iterator, validate_path, write_json
 from shapely.geometry import LineString, Polygon, MultiPolygon, GeometryCollection
-from miscSupports import flatten, multi_to_poly
 from shapely.ops import split as shp_split
+from typing import List, Union, Optional, Tuple
 from shapeObject import ShapeObject
 from pathlib import Path
-import json
 import re
-import os
+
+import sys
 
 
 class ConstructWeights:
-    def __init__(self, working_directory, base_name, subunits=None, shape_file_folder_name="Shapefiles", gid=0, name=1,
-                 name_class=None, cut_off=100, weight_index=-1):
+    def __init__(self, working_directory: Union[str, Path], base_name: str, gid: int, name_indexes: List[int],
+                 subunits: Optional[Union[str, Path]] = None, shapefile_folder="Shapefiles", cut_off=100,
+                 weight_index: Optional[int] = None):
         """
         This class takes a set of shapefiles and creates a weighted json based on either the overlapping area or
         underlying population.
 
-        :param working_directory: Project Directory
-        :param base_name: Shapefile name that you wish to weight too
-        :param subunits: If you want to use geographic sub units
-        :param shape_file_folder_name: Default name of the folder holding shapefiles, can be renamed
-        :param gid: the index of the index column of the attribute table
-        :param name: the index of the name column of the attribute table
-        :param name_class: If names have a second column of supporting information assigned to them in the attribute
-            then place the index of that column here
-        :param cut_off: Cut of to deal with floating point errors and minor human error
-        :param weight_index: If using subunits, the column index of the attribute table containing your weight data
         """
-
-        self._working_dir = Path(working_directory)
-        self.base, self.base_index, self.shapefiles, self.sub_units = self._validate_setup(
-            shape_file_folder_name, base_name, subunits, weight_index)
-
+        self._working_dir = Path(validate_path(working_directory))
+        setup_files = self._validate_setup(shapefile_folder, base_name, subunits, weight_index)
+        self.base, self.shapefiles, self.sub_units, self._weight_index = setup_files
         self._gid = gid
-        self._name = name
-        self._name_class = name_class
+        self._name_indexes = name_indexes
         self._cut_off = cut_off
-        self._weight_index = weight_index
-        self.shape_folder = shape_file_folder_name
 
-    def construct_base_weights(self):
+    def _validate_setup(self, shapefile_folder: str, base_name: str, subunits: Optional[Union[str, Path]],
+                        weight_index: int) -> Tuple[ShapeObject, List[ShapeObject], Optional[ShapeObject],
+                                                    Optional[int]]:
+        """Validate the setup for constructing the base"""
+        # Set shapefile name path, valid it exists
+        file_path = validate_path(Path(self._working_dir, shapefile_folder))
+
+        # Check the base name exists within the shapefile folder, and there is at least one other file
+        shapefiles = sorted([file for file in directory_iterator(file_path) if Path(file_path, file).suffix == ".shp"])
+        if base_name not in shapefiles:
+            raise BaseNameNotFound(base_name, file_path)
+        if len(shapefiles) <= 1:
+            raise IndexError(f"Found {len(shapefiles)} files, but at least two files are required to weight")
+
+        # Load the shapefiles and, if required, the subunits. Then return
+        shape_files = [ShapeObject(f"{file_path}/{file}") for file in shapefiles]
+        subunit_shapefile, weight_index = self._load_sub_units(subunits, weight_index)
+        return ShapeObject(f"{file_path}/{base_name}"), shape_files, subunit_shapefile, weight_index
+
+    def _load_sub_units(self, subunit_path: Optional[Union[str, Path]], weight_index: Optional[int]):
+        """Load the Sub unit file, if it was requested, and validate a weight_index was set if loaded"""
+        if not subunit_path:
+            return None, None
+
+        if Path(subunit_path).exists():
+            subunits = ShapeObject(subunit_path)
+        elif Path(f"{self._working_dir}/{subunit_path}").exists():
+            subunits = ShapeObject(f"{self._working_dir}/{subunit_path}")
+        else:
+            raise FileNotFoundError(f"Sub unit weighting specified but no file called {subunit_path} found in "
+                                    f"{self._working_dir}")
+
+        # If we load the sub-unit shapefile but didn't specify a weight, inform the user
+        if not weight_index:
+            raise NoSubUnitWeightIndex()
+        return subunits, weight_index
+
+    def construct_base_weights(self, write_name: str = 'BaseWeights') -> None:
         """
         Construct the base weights for a set of shapefiles.
 
-        Further information
-        -----------------------
         This iterates through the shapes in the base shapefile to index to, and finds overlapping shapes in another
         shapefile to calculate anm area weight. If sub unit searching is enabled, it is also possible to use under-
         lapping geometery to calculate a sub unit weight. This is done for every shape in the base shapefile and then
         returned
-
-        :return: The base weights calculated
-        :rtype: list
         """
         base_weights = {f"{rec[self._gid]}__{self._construct_name(rec)}": [] for rec in self.base.records}
         for c, (shape, record) in enumerate(zip(self.base.polygons, self.base.records)):
@@ -71,7 +92,7 @@ class ConstructWeights:
 
             base_weights[f"{record[self._gid]}__{self._construct_name(record)}"] = self._format_weights(match_weights)
 
-        self._write_out_base_weights(base_weights)
+        write_json(base_weights, self._working_dir, write_name)
 
     def _polygon_area_weights(self, current_shape, match_shape_file):
         """
@@ -95,25 +116,11 @@ class ConstructWeights:
 
         return area_weights
 
-    def _construct_name(self, record):
+    def _construct_name(self, record: List[str]) -> str:
         """
-        Constructs the place name
-
-        Names may be broken into types, for example in the UK Districts can often have an urban and rural districts
-        which means the actual name of the district is split into two columns. This function stitches the names back
-        together if this is the case, and just returns the name otherwise
-
-        :param record: A list of records, where each record represents an entry in a given column in the attribute table
-        :type record: list
-
-        :return: The name of the current place
-        :rtype: str
+        Constructs the place name from the record from a list of indexes
         """
-
-        if self._name_class:
-            return record[self._name] + record[self._name_class]
-        else:
-            return record[self._name]
+        return "_".join([record[i] for i in self._name_indexes])
 
     def _sub_weight(self, base_shape, area_weight):
         """
@@ -378,70 +385,12 @@ class ConstructWeights:
         else:
             return [record_index, split_poly]
 
-    def _write_out_base_weights(self, base_weights):
+    def _format_weights(self, weights):
         """
-        Write out the base weights
-
-        :param base_weights: A list of all the base weights
-        :type base_weights: dict
-
-        :return: Nothing, write out file then stop
-        :rtype: None
-
+        Now we have lists of data, but we want to structure these lists into dictionarys so we can parse the information
+        quickly and also have the data have a greater level of human readability
         """
-        # Set write out name
-        if self.shape_folder != "Shapefiles":
-            name = self.shape_folder
-        else:
-            name = "BaseWeights"
-
-        # Try to write out the weights, but attempt to do so without the rick of over-writing the file
-        try:
-            length = len([file for file in os.listdir(f"{self._working_dir}/BaseWeights")])
-            with open(f"{self._working_dir}/BaseWeights/{name}_{length}.txt", "w", encoding="utf-8") as json_saver:
-                json.dump(base_weights, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
-
-        except FileNotFoundError:
-            Path(f"{self._working_dir}/BaseWeights").mkdir()
-            length = len([file for file in os.listdir(f"{self._working_dir}/BaseWeights")])
-            with open(f"{self._working_dir}/BaseWeights/{name}_{length}.txt", "w", encoding="utf-8") as json_saver:
-                json.dump(base_weights, json_saver, ensure_ascii=False, indent=4, sort_keys=True)
-
-        except OSError as ex:
-            print(ex)
-
-    def _validate_setup(self, shape_file_folder_name, base_name, subunits, weight_index):
-        """
-        Valid setup for constructing the base
-        """
-        file_path = f"{self._working_dir}/{shape_file_folder_name}"
-
-        # Check a directory of shapefiles exist
-        assert os.path.isdir(file_path), f"Directory '{shape_file_folder_name}' was not found in {self._working_dir}"
-
-        # Check enough files where submitted
-        shape_file_files = sorted([file for file in os.listdir(file_path) if file.split(".")[-1] == "shp"])
-        assert base_name in shape_file_files, f"{base_name} was not found in the list of files: {shape_file_files}"
-        assert len(shape_file_files) > 1, f"Found {len(shape_file_files)} files, but at least two files are required" \
-                                          f" to weight"
-
-        # If subunits, check file can be loaded and return, else just return.
-        if subunits:
-            if Path(subunits).exists():
-                subunits = ShapeObject(subunits)
-            elif Path(f"{self._working_dir}/{subunits}").exists():
-                subunits = ShapeObject(f"{self._working_dir}/{subunits}")
-            else:
-                raise FileNotFoundError(f"Sub unit weighting specified but no file called {subunits} found in "
-                                        f"{self._working_dir}")
-
-            assert weight_index >= 0, "Please specify the record base zero index for the column with the population " \
-                                      "weight within it"
-
-        base_index = [index for index, file in enumerate(shape_file_files) if file == base_name][0]
-        shape_files = [ShapeObject(f"{file_path}/{file}") for file in shape_file_files]
-
-        return ShapeObject(f"{file_path}/{shape_file_files[base_index]}"), base_index, shape_files, subunits
+        return {key: self._set_format(place_weights) for key, place_weights in zip(weights.keys(), weights.values())}
 
     def _set_format(self, weights):
         """
@@ -454,10 +403,3 @@ class ConstructWeights:
                     for gid, place, area, population in weights}
         else:
             return {f"{gid}__{place}": {"Area": area} for gid, place, area in weights}
-
-    def _format_weights(self, weights):
-        """
-        Now we have lists of data, but we want to structure these lists into dictionarys so we can parse the information
-        quickly and also have the data have a greater level of human readability
-        """
-        return {key: self._set_format(place_weights) for key, place_weights in zip(weights.keys(), weights.values())}
