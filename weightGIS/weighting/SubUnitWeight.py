@@ -9,18 +9,28 @@ from shapeObject import ShapeObject
 from typing import Union
 
 
+class SubUnit:
+    def __init__(self, full_weight: float, shape: Union[Polygon, MultiPolygon],
+                 sub_unit_poly: Union[Polygon, MultiPolygon], cut_off):
+        self.full_weight = full_weight
+        self.area = sub_unit_poly.area
+        self.interiors = flatten([self._set_interior_polygons(shape, p, cut_off) for p in multi_to_poly(sub_unit_poly)])
+
+    @staticmethod
+    def _set_interior_polygons(polygon, p, cut_off):
+        return [shp for shp in shp_split(p, LineString(polygon.exterior)) if polygon.intersection(shp).area > cut_off]
+
+
 class SubUnitWeight:
     def __init__(self, sub_units: ShapeObject, overlap: Union[Polygon, MultiPolygon], weight_index: int,
-                 cut_off: Union[int, float], gid: int):
+                 cut_off: Union[int, float], gid: int, base_shape: Union[Polygon, MultiPolygon]):
 
         self.sub_units = sub_units
         self.overlap = overlap
         self.weight_index = weight_index
         self._cut_off = cut_off
         self.gid = gid
-
-        print("NEW")
-        self.sub_unit_weight()
+        self.base_shp = base_shape
 
     def _reconstruct_high_order_unit(self, polygon: Union[Polygon, MultiPolygon], weight_index: Union[int, float]):
         """This recreates a shape by the sub-unit shapefile"""
@@ -29,47 +39,43 @@ class SubUnitWeight:
 
         for rec, poly in zip(self.sub_units.records, self.sub_units.polygons):
             if polygon.intersection(poly).area > self._cut_off:
-                a[rec[self.gid]] = {'FullWeight': rec[weight_index], 'Polygons': multi_to_poly(poly), 'Interior': flatten([self._set_interior_polygons(polygon, p) for p in multi_to_poly(poly)]),
-                                    'Area': poly.area, 'SubWeight': -1, 'BaseWeight': -1}
+                a[rec[self.gid]] = SubUnit(float(rec[weight_index]), polygon, poly, self._cut_off)
 
         return a
 
-    def _set_interior_polygons(self, polygon, p):
-        return [b for b in shp_split(p, LineString(polygon.exterior)) if polygon.intersection(b).area > self._cut_off]
 
 
     def sub_unit_weight(self):
+        print("NEW")
 
         for poly in multi_to_poly(self.overlap):
 
             a = self._reconstruct_high_order_unit(poly, self.weight_index)
 
-            # for i, sub_unit in enumerate(a.values()):
-            #     for p in sub_unit['Polygons']:
-            #         for b in shp_split(p, LineString(poly.exterior)):
-            #             if poly.intersection(b).area > self._cut_off:
-            #                 sub_unit['Interior'].append(b)
+            # # TODO: This is going to crash
+            # if len(poly.interiors) > 0:
+            #     print('INTERIOR FOUND')
+            #     interior_polygons = [self._hole_punch_sub_unit(poly, p) for p in a]
+            #     sys.exit()
+            #
 
-            print(a)
-
-            # TODO: This is going to crash
-            if len(poly.interiors) > 0:
-                print('INTERIOR FOUND')
-                interior_polygons = [self._hole_punch_sub_unit(poly, p) for p in a]
-                sys.exit()
-
+            c = []
+            d = []
             for sub_unit in a.values():
 
-                for interior in sub_unit['Interior']:
-                    sub_unit['SubWeight'] = float(sub_unit['FullWeight']) * (interior.area / sub_unit['Area'])
+                # TODO: Population weight sshould be calcualted WITHIN Sub units, we also need to allow for polygon interiors
+                for interior in sub_unit.interiors:
+                    population_weight = float(sub_unit.full_weight) * (interior.area / sub_unit.area)
+                    c.append(population_weight)
 
-                    print(sub_unit['SubWeight'])
-
-            print(a.values())
-
+                    if interior.intersection(self.base_shp).area > self._cut_off:
+                        d.append(population_weight * (interior.intersection(self.base_shp).area / interior.area))
 
 
 
+            print(sum(c))
+            print(sum(d))
+            print(f"NEW WEIGHT: {(sum(d) / sum(c) * 100)}")
 
         return
 
