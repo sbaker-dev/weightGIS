@@ -127,55 +127,35 @@ class SubUnitWeight:
         d = []
         for i, poly in enumerate(multi_to_poly(self.overlap)):
 
-
-
             interior_polys = []
             for sub_poly in self.sub_units:
                 if poly.intersection(sub_poly.poly).area > self._cut_off:
-                    print(sub_poly)
-
                     for p in shp_split(sub_poly.poly, LineString(poly.exterior)):
                         if poly.intersection(p).area > self._cut_off:
-                            interior_polys.append(InteriorPoly(p, sub_poly.weight * (p.area / sub_poly.poly.area)))
+                            for pp in self._hole_punch_sub_unit(poly, p):
+
+                                interior_polys.append(InteriorPoly(pp, sub_poly.weight * (pp.area / sub_poly.poly.area)))
+
+                            # # todo Add in the split on holes
+                            # interior_polys.append(InteriorPoly(p, sub_poly.weight * (p.area / sub_poly.poly.area)))
 
 
-            # write_shape_file(r"I:\Work\Shapefiles\TTT", 'TESTOVERLAP', ['T'], p_list, [[i] for i in range(len(p_list))])
-
-            print([i.weight for i in interior_polys])
             c.append(sum([i.weight for i in interior_polys]))
 
 
             base_polys = []
             for interior in interior_polys:
-                print(interior)
                 if self.base_shp.intersection(interior.poly).area > self._cut_off:
 
                     for p in shp_split(interior.poly, LineString(self.base_shp.exterior)):
                         if self.base_shp.intersection(p).area > self._cut_off:
-                            base_polys.append(InteriorPoly(p, interior.weight * (p.area / interior.poly.area)))
+                            for pp in self._hole_punch_sub_unit(self.base_shp, p):
 
-            # base_polys = []
-            # for interior in interior_polys:
-            #     if self.base_shp.intersection(interior.poly).area > self._cut_off:
-            #         for p in shp_split(interior.poly, LineString(self.base_shp.exterior)):
-            #             if self.base_shp.intersection(interior.poly).area > self._cut_off:
-            #
-            #             # for pp in self._hole_punch_sub_unit(self.base_shp, p):
-            #
-            #                 base_polys.append(InteriorPoly(p, interior.weight * (p.area / interior.poly.area)))
+                                base_polys.append(InteriorPoly(pp, interior.weight * (pp.area / interior.poly.area)))
 
-            print([i.weight for i in base_polys])
+                            # base_polys.append(InteriorPoly(p, interior.weight * (p.area / interior.poly.area)))
+
             d.append(sum([i.weight for i in base_polys]))
-
-            # for sub_unit in a.values():
-            #     # TODO: Population weight sshould be calcualted WITHIN Sub units, we also need to allow for polygon interiors
-            #     for interior in sub_unit.interiors:
-            #         population_weight = float(sub_unit.full_weight) * (interior.area / sub_unit.area)
-            #         c.append(population_weight)
-            #
-            #     if interior.intersection(self.base_shp).area > self._cut_off:
-            #         d.append(population_weight * (interior.intersection(self.base_shp).area / interior.area))
-
 
         print(f"NEW WEIGHT: {(sum(d) / sum(c) * 100)}")
 
