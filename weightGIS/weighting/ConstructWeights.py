@@ -1,14 +1,62 @@
 from weightGIS.Errors import BaseNameNotFound, NoSubUnitWeightIndex
 
-from miscSupports import flatten, multi_to_poly, directory_iterator, validate_path, write_json
-from shapely.geometry import LineString, Polygon, MultiPolygon, GeometryCollection
+from dataclasses import dataclass
+from miscSupports import multi_to_poly, directory_iterator, validate_path, write_json
+from shapely.geometry import LineString, Polygon, MultiPolygon
 from shapely.ops import split as shp_split
-from typing import List, Union, Optional, Tuple, Dict
+from typing import List, Union, Optional, Tuple
 from shapeObject import ShapeObject
 from pathlib import Path
 import re
 
-import sys
+
+# TODO: These two probably don't need to be unique
+@dataclass
+class InteriorPoly:
+    poly: Polygon
+    weight: float
+
+
+@dataclass
+class SubPoly:
+    gid: str
+    poly: Polygon
+    weight: float
+
+
+class SetSubUnits:
+    def __init__(self, subunits, weight_index, gid, working_directory):
+
+        self.subunit_filename = subunits
+        self.working_dir = working_directory
+
+        self.weight_index = self._set_weight_index(weight_index)
+        self.gid = gid
+
+    @staticmethod
+    def _set_weight_index(weight_index):
+        """If a weight index has not be declared raise an excpetion"""
+        if not weight_index:
+            raise NoSubUnitWeightIndex()
+        return weight_index
+
+    def _load_sub_units(self):
+        """Load the Sub unit file, if it was requested, and validate a weight_index was set if loaded"""
+        # If the subunit name is a path, load it from that path
+        if Path(self.subunit_filename).exists():
+            return ShapeObject(self.subunit_filename)
+
+        # Otherwise check if it is a file name that exists in the project directory
+        elif Path(self.working_dir, self.subunit_filename).exists():
+            return ShapeObject(f"{self.working_dir}/{self.subunit_filename}")
+        else:
+            raise FileNotFoundError(f"Sub unit weighting specified but no file called {self.subunit_filename} found in "
+                                    f"{self.working_dir}")
+
+    def __call__(self):
+        sub_units = self._load_sub_units()
+        return [SubPoly(str(rec[self.gid]), p, float(rec[self.weight_index]) * (p.area / poly.area))
+                for poly, rec in zip(sub_units.polygons, sub_units.records) for p in multi_to_poly(poly)]
 
 
 class ConstructWeights:
@@ -21,15 +69,19 @@ class ConstructWeights:
 
         """
         self._working_dir = Path(validate_path(working_directory))
-        setup_files = self._validate_setup(shapefile_folder, base_name, subunits, weight_index)
-        self.base, self.shapefiles, self.sub_units, self._weight_index = setup_files
         self._gid = gid
         self._name_indexes = name_indexes
         self._cut_off = cut_off
 
+        # TODO: Legacy? Remove once new version works
+        self._weight_index = weight_index
+        self.sub_units = ShapeObject(f"{working_directory}/{subunits}")
+
+        setup_files = self._validate_setup(shapefile_folder, base_name, subunits, weight_index)
+        self.base, self.shapefiles, self.sub_units2 = setup_files
+
     def _validate_setup(self, shapefile_folder: str, base_name: str, subunits: Optional[Union[str, Path]],
-                        weight_index: int) -> Tuple[ShapeObject, List[ShapeObject], Optional[ShapeObject],
-                                                    Optional[int]]:
+                        weight_index: int) -> Tuple[ShapeObject, List[ShapeObject], Optional[List[SubPoly]]]:
         """Validate the setup for constructing the base"""
         # Set shapefile name path, valid it exists
         file_path = validate_path(Path(self._working_dir, shapefile_folder))
@@ -43,26 +95,11 @@ class ConstructWeights:
 
         # Load the shapefiles and, if required, the subunits. Then return
         shape_files = [ShapeObject(f"{file_path}/{file}") for file in shapefiles]
-        subunit_shapefile, weight_index = self._load_sub_units(subunits, weight_index)
-        return ShapeObject(f"{file_path}/{base_name}"), shape_files, subunit_shapefile, weight_index
-
-    def _load_sub_units(self, subunit_path: Optional[Union[str, Path]], weight_index: Optional[int]):
-        """Load the Sub unit file, if it was requested, and validate a weight_index was set if loaded"""
-        if not subunit_path:
-            return None, None
-
-        if Path(subunit_path).exists():
-            subunits = ShapeObject(subunit_path)
-        elif Path(f"{self._working_dir}/{subunit_path}").exists():
-            subunits = ShapeObject(f"{self._working_dir}/{subunit_path}")
+        if subunits:
+            sub_units = SetSubUnits(subunits, weight_index, self._gid, self._working_dir)()
         else:
-            raise FileNotFoundError(f"Sub unit weighting specified but no file called {subunit_path} found in "
-                                    f"{self._working_dir}")
-
-        # If we load the sub-unit shapefile but didn't specify a weight, inform the user
-        if not weight_index:
-            raise NoSubUnitWeightIndex()
-        return subunits, weight_index
+            sub_units = None
+        return ShapeObject(f"{file_path}/{base_name}"), shape_files, sub_units
 
     def construct_base_weights(self, write_name: str = 'BaseWeights') -> None:
         """
@@ -75,7 +112,7 @@ class ConstructWeights:
         """
         base_weights = {f"{rec[self._gid]}__{self._construct_name(rec)}": [] for rec in self.base.records}
         for c, (shape, record) in enumerate(zip(self.base.polygons, self.base.records)):
-            print(f"{c + 1} / {len(self.base.polygons)}")
+            # print(f"{record[self._gid]}: {c + 1} / {len(self.base.polygons)}")
 
             match_weights = {file: [] for file in [re.sub(r'\D', "", file.file_name) for file in self.shapefiles]}
             for index, match_shape_file in enumerate(self.shapefiles):
@@ -88,10 +125,10 @@ class ConstructWeights:
                     weights = {gid: self._sub_weight(shape, overlap_values) for gid, overlap_values in weights.items()}
 
                 match_weights[re.sub(r'\D', "", match_shape_file.file_name)] = weights
+
             base_weights[f"{record[self._gid]}__{self._construct_name(record)}"] = match_weights
 
-            print(match_weights)
-        # write_json(base_weights, self._working_dir, write_name)
+        write_json(base_weights, r"I:\Work\Shapefiles\TTT", write_name)
 
     def _polygon_area_weights(self, current_shape: Union[Polygon, MultiPolygon], match_shape_file: ShapeObject) -> dict:
         """
@@ -119,7 +156,7 @@ class ConstructWeights:
         """
         return "_".join([record[i] for i in self._name_indexes])
 
-    def _sub_weight(self, base_shape: Union[Polygon, MultiPolygon], overlap_values: dict):
+    def _sub_weight(self, base_shape: Union[Polygon, MultiPolygon], overlap_values: dict) -> dict:
         """
         Calculates and returns the sub unit weight for each overlapping shape
 
@@ -130,227 +167,39 @@ class ConstructWeights:
 
         """
         if overlap_values['Area'] != 100:
-            weight_of_match, weighted_set = self._sub_unit_weight(self.sub_units, overlap_values['Match'],
-                                                                  self._weight_index)
-            weight_of_base, weighted_set = self._sub_unit_weight(flatten(weighted_set), base_shape, None)
+            interior_polys = self._sub_poly_weight(self.sub_units2, overlap_values['Match'])
+            base_polys = self._sub_poly_weight(interior_polys, base_shape)
 
-            overlap_values['Population'] = (weight_of_base / weight_of_match) * 100
+            weight = (sum(i.weight for i in base_polys) / sum(i.weight for i in interior_polys) * 100)
+            overlap_values['Population'] = weight
+
         else:
             overlap_values['Population'] = 100
         overlap_values.pop('Match', None)
         return overlap_values
 
-    def _sub_unit_weight(self, sub_unit_file, within_search_polygon, weight_index):
-        """
-        This configures the input file and then searches for under-lying polygons within the current
-        within_search_polygon. Returns the weight associated with this polygon and the weight set of polygons
-
-        :param sub_unit_file: The External ShapeObject to read in and check or the polygons found within this external
-            ShapeObject in the form of a list
-        :type sub_unit_file: ShapeObject | list
-
-        :param within_search_polygon: The Current polygon to search within
-        :type within_search_polygon: Polygon | MultiPolygon
-
-        :param weight_index: For external data, the index position of the weights in the attribute table. Not required
-            for the internal.
-        :type weight_index: int | None
-
-        :return: The weight associated with this polygon and the weight set of polygons
-        :rtype: tuple[float, list[list[float, Polygon]]]
-        """
-        sub_units, record_list, sub_shape_polygons, current_shape = self._configure_sub_shapes(
-            sub_unit_file, within_search_polygon, weight_index)
-
-        weighted_set = [self._select_under(poly, sub_shape_polygons, record_list, sub_units) for poly in current_shape]
-        weight = sum([population_weight for population_weight, _ in flatten(weighted_set)])
-        return weight, weighted_set
-
-    def _configure_sub_shapes(self, sub_unit_file, within_search_polygon, weight_index):
-        """
-        Returns the under-lapping sub units, weight records, reformed under-lapping sub units to be just Polygons and
-        the reformed current shape
-
-        This method is going to be called twice per overlapping polygon of the base shapefiles current polygon. Once to
-        find the under-lapping units of the overlapping polygon, and once to see of these under-lapping units how much
-        of them are in the base shapefiles current polygon.
-
-        As such, this method checks the instance of the sub_unit file and formats under-lapping sub units and records
-        accordingly as in the first instance this will be data that was held externally but the second instance will be
-        an internal read from memory.
-
-        Some shapely methods don't work well on multipolygons, so the found list of under-lapping polygons and the
-        current shape are then set to be a list of shapely Polygons to fix this.
-
-        :param sub_unit_file: The External ShapeObject to read in and check or the polygons found within this external
-            ShapeObject in the form of a list
-        :type sub_unit_file: ShapeObject | list
-
-        :param within_search_polygon: The Current polygon to search within
-        :type within_search_polygon: Polygon | MultiPolygon
-
-        :param weight_index: For external data, the index position of the weights in the attribute table. Not required
-            for the internal.
-        :type weight_index: int | None
-
-        :return: The under-lapping sub units, weight records, reformed under-lapping sub units and the reformed current
-            shape
-        :rtype: tuple[list[Polygon | MultiPolygon], list[float | int], list[list[Polygon]], list[Polygon]]
-        """
-        if isinstance(sub_unit_file, ShapeObject):
-            sub_units, record_list = self._extract_sub_units_data(within_search_polygon, sub_unit_file, weight_index)
-        else:
-            sub_units, record_list = self._extract_overlap_units_data(within_search_polygon, sub_unit_file)
-
-        sublist_shape_polygons = [multi_to_poly(polygon_type) for polygon_type in sub_units]
-        current_shape = multi_to_poly(within_search_polygon)
-        return sub_units, record_list, sublist_shape_polygons, current_shape
-
-    def _extract_overlap_units_data(self, within_search_polygon, sub_shapes):
-        """
-        Extract the under-lapping polygons geometry from a list format
-
-        :param within_search_polygon: The Current polygon to search within
-        :type within_search_polygon: Polygon | MultiPolygon
-
-        :param sub_shapes: A list, where each element in the list is a float weight and the Polygons
-        :type sub_shapes: list[float, Polygons]
-
-        :return: A list of all the under-lapping polygons and a list of records that correspond to those polygons.
-        :rtype: tuple[list[float], list[Polygons]]
-        """
-        subunit_list = []
-        record_list = []
-        for record, poly in sub_shapes:
-            if within_search_polygon.intersection(poly).area > self._cut_off:
-                subunit_list.append(poly)
-                record_list.append(record)
-        return subunit_list, record_list
-
-    def _extract_sub_units_data(self, within_search_polygon, sub_shapes, weight_index):
-        """
-        Extract the under-lapping polygons geometry
-
-        :param within_search_polygon: The Current polygon to search within
-        :type within_search_polygon: Polygon | MultiPolygon
-
-        :param sub_shapes: A ShapeObject file, which contains under-lapping geometry
-        :type sub_shapes: ShapeObject
-
-        :param weight_index: The index to parse information out of the attribute table from the ShapeObject
-        :type weight_index: int
-
-        :return: A list of all the under-lapping polygons and a list of records that correspond to those polygons.
-        :rtype: tuple[list[float], list[Polygons]]
-        """
-        subunit_list = []
-        record_list = []
-        for poly, record in zip(sub_shapes.polygons, sub_shapes.records):
-            if within_search_polygon.intersection(poly).area > self._cut_off:
-                subunit_list.append(poly)
-                record_list.append(record[weight_index])
-        return subunit_list, record_list
-
-    def _select_under(self, polygon, sublist_shape_polygons, record_list, sub_units):
-        """
-        Select under-lapping polygons, select the interior parts of them, punch out any holes that existed in the the
-        current polygon, and then return a list of lists of the weights and polygons.
-
-        This splits the shapes that where found to be under-lapping and then isolates the interior polygons. If the
-        current polygon has a hole, or hole(s) within it, then this hole is then used as to punch out the under-lapping
-        polygons. Finally the weight is calculated and the combined with the polygon and returned in the form of a list
-        of lists.
-
-        :param polygon: A polygon from the current within_search_polygon
-        :type polygon: Polygon
-
-        :param sublist_shape_polygons: reformed under-lapping sub units to be just Polygons
-        :type sublist_shape_polygons: list[list[Polygon]]
-
-        :param record_list: list of weight records
-        :type record_list: list[float | int]
-
-        :param sub_units: A list of Polygonal geometry
-        :type sub_units: list[Polygon | MultiPolygon]
-
-        :return: A list of lists, where sub lists are made up of a float relating to the weight and a Polygon.
-        :rtype: list[list[float, Polygon]]
-        """
-        split_shapes = self._split_sub_unit_shapes(sublist_shape_polygons, polygon)
-
-        interior_polygons = [[rec_index, poly] for rec_index, shape in split_shapes for poly in shape
-                             if polygon.intersection(poly).area > self._cut_off]
-
-        if len(polygon.interiors) > 0:
-            interior_polygons = [self._hole_punch_sub_unit(polygon, poly) for poly in interior_polygons]
-
-        polygons_to_weight = self._reform_interior_polygons_for_weighting(interior_polygons)
-
-        weighted_polygons = []
-        for i, (rec_index, poly) in enumerate(polygons_to_weight):
-            # The population is weighted based on the % area of the zone within the zone
-            weight = float(record_list[rec_index]) * (poly.area / sub_units[rec_index].area)
-            weighted_polygons.append([weight, poly])
-        return weighted_polygons
-
-    def _split_sub_unit_shapes(self, sublist_shape_polygons, polygon):
-        """
-        Returns a list of Geometery collects with the reference index to the original
-
-        :param sublist_shape_polygons: reformed under-lapping sub units to be just Polygons
-        :type sublist_shape_polygons: list[list[Polygon]]
-
-        :param polygon: A polygon from the current within_search_polygon
-        :type polygon: Polygon
-
-        :return: A list of lists, where the sub lists include a reference index to the original shape found and a
-            GeometryCollection found from the splitting
-        :rtype: list[list[int, GeometryCollection]]
-        """
-        split_shapes = []
-        for index, shape in enumerate(sublist_shape_polygons):
-            for sub in shape:
-                if polygon.intersection(sub).area > self._cut_off:
-                    split_shapes.append([index, shp_split(sub, LineString(polygon.exterior))])
-        return split_shapes
-
-    @staticmethod
-    def _reform_interior_polygons_for_weighting(interior_polygons):
-        """
-        Interior polygons may end up in multiple formats due to interior holes, this standardises them.
-
-        :param interior_polygons: List of lists, where sub lists are a reference index and Polygon
-        :type interior_polygons: list[list[int, Polygon] | list[int, list[Polygon]]]
-
-        :return: list[list[int, Polygon]
-        """
-        polygons_to_weight = []
-        for poly_list in interior_polygons:
-            if isinstance(poly_list[0], list):
-                for p_list in poly_list:
-                    polygons_to_weight.append(p_list)
-            else:
-                polygons_to_weight.append(poly_list)
-        return polygons_to_weight
+    def _sub_poly_weight(self, sub_units, main_polygon):
+        interior_polys = []
+        # For each subunit
+        for sub_poly in sub_units:
+            # For each poly in the main poly (cannot do hole / intersections on multi-polygons)
+            for poly in multi_to_poly(main_polygon):
+                # Check if the poly intersections with the sub poly
+                if poly.intersection(sub_poly.poly).area > self._cut_off:
+                    # Split the sub poly by poly
+                    for p in shp_split(sub_poly.poly, LineString(poly.exterior)):
+                        # If this split shape is within poly
+                        if poly.intersection(p).area > self._cut_off:
+                            # Punch holes out of the element
+                            for pp in self._hole_punch_sub_unit(poly, p):
+                                interior_polys.append(InteriorPoly(pp, sub_poly.weight * (pp.area / sub_poly.poly.area)))
+        return interior_polys
 
     def _hole_punch_sub_unit(self, current_polygon, split_poly):
         """
         A polygon may have holes within it, so we need to punch the holes out so as to not get an inaccurate area.
-
-        :param current_polygon: The current polygon from the current shape we are processing
-        :type current_polygon: Polygon
-
-        :param split_poly: The polygon we have split which we need to punch a hole out of
-        :type split_poly: list[Polygon]
-
-        :return: If there are any changes from holes, return a new list otherwise just return a list holding the split
-            polygon that was found where the list is the reference int and Polygon.
-        :rtype: list[int, Polygon]
         """
         changes_from_holes = False
-
-        record_index, split_poly = split_poly
-
         poly_list = []
         for hole in current_polygon.interiors:
             if Polygon(hole).intersection(split_poly).area > self._cut_off:
@@ -360,7 +209,7 @@ class ConstructWeights:
                 # Now we only isolate the parts that are within the overlap from the cut
                 for hole_cut_poly in split_poly_hole_punched:
                     if current_polygon.intersection(hole_cut_poly).area > self._cut_off:
-                        poly_list.append([record_index, hole_cut_poly])
+                        poly_list.append(hole_cut_poly)
 
                 if len(poly_list) == 0:
                     changes_from_holes = False
@@ -368,4 +217,4 @@ class ConstructWeights:
         if changes_from_holes:
             return poly_list
         else:
-            return [record_index, split_poly]
+            return [split_poly]
