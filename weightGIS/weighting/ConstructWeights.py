@@ -3,7 +3,7 @@ from weightGIS.Errors import BaseNameNotFound, NoSubUnitWeightIndex
 from miscSupports import multi_to_poly, directory_iterator, validate_path, write_json
 from shapely.geometry import LineString, Polygon, MultiPolygon
 from shapely.ops import split as shp_split
-from typing import List, Union, Optional, Tuple
+from typing import List, Union, Optional
 from shapeObject import ShapeObject
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,37 +17,75 @@ class SubPoly:
     weight: Optional[float]
 
 
-class SetSubUnits:
-    def __init__(self, subunits, weight_index, gid, working_directory):
+class PreValidateConstructWeights:
+    def __init__(self, working_directory, shapefile_folder, base_name: str, subunits, gid, weight_index):
 
-        self.subunit_filename = subunits
-        self.working_dir = working_directory
+        # Validate the working directory
+        self._working_dir = Path(validate_path(working_directory))
 
-        self.weight_index = self._set_weight_index(weight_index)
-        self.gid = gid
+        # Validate the shapefile folder directory
+        self._shp_path = validate_path(Path(self._working_dir, shapefile_folder))
+
+        # Set the base shapefile name
+        self._base_name = base_name
+
+        # Set if we are investigating sub-units, and note the gid and weight indexes for isolation if we are
+        self._sub_units, self.gid, self.weight_index = subunits, gid, self._set_weight_index(weight_index)
+
+    def __call__(self):
+        """Validate the starting parameters of ConstructWeights"""
+
+        # Isolate all the shapefiles to investigate changes between
+        shape_files = [ShapeObject(f"{self._shp_path}/{file}") for file in self._isolate_shapefiles()]
+
+        # If we are allowing for sub unit population weighting, load that shapefile as well
+        if self._sub_units:
+            sub_units = self._load_sub_units()
+        else:
+            sub_units = None
+
+        # Return the base shapefile, the other shapefiles, and the sub-unit shapefile
+        return ShapeObject(f"{self._shp_path}/{self._base_name}"), shape_files, sub_units
 
     @staticmethod
     def _set_weight_index(weight_index):
-        """If a weight index has not be declared raise an excpetion"""
+        """If a weight index has not be declared raise an exception"""
         if not weight_index:
             raise NoSubUnitWeightIndex()
         return weight_index
 
+    def _isolate_shapefiles(self):
+        """
+        Isolate the shapefile paths, validating that both the base shapefile exists and at least one other file as well
+        """
+        # Check the base name exists within the shapefile folder, and there is at least one other file
+        shapefiles = sorted([file for file in directory_iterator(self._shp_path)
+                             if Path(self._shp_path, file).suffix == ".shp"])
+
+        # If it doesn't raise failed to find the base name, raise BaseNameNotFound
+        if self._base_name not in shapefiles:
+            raise BaseNameNotFound(self._base_name, self._shp_path)
+
+        # If we only found a single shapefile, raise an index error
+        if len(shapefiles) <= 1:
+            raise IndexError(f"Found {len(shapefiles)} files, but at least two files are required to weight")
+        return shapefiles
+
     def _load_sub_units(self):
         """Load the Sub unit file, if it was requested, and validate a weight_index was set if loaded"""
         # If the subunit name is a path, load it from that path
-        if Path(self.subunit_filename).exists():
-            return ShapeObject(self.subunit_filename)
+        if Path(self._sub_units).exists():
+            sub_units = ShapeObject(self._sub_units)
 
         # Otherwise check if it is a file name that exists in the project directory
-        elif Path(self.working_dir, self.subunit_filename).exists():
-            return ShapeObject(f"{self.working_dir}/{self.subunit_filename}")
-        else:
-            raise FileNotFoundError(f"Sub unit weighting specified but no file called {self.subunit_filename} found in "
-                                    f"{self.working_dir}")
+        elif Path(self._working_dir, self._sub_units).exists():
+            sub_units = ShapeObject(f"{self._working_dir}/{self._sub_units}")
 
-    def __call__(self):
-        sub_units = self._load_sub_units()
+        else:
+            raise FileNotFoundError(f"Sub unit weighting specified but no file called {self._sub_units} found in "
+                                    f"{self._working_dir}")
+
+        # Area interactions don't work with multi-polygons, so split each one based on area of sub poly to multi-polygon
         return [SubPoly(str(rec[self.gid]), p, float(rec[self.weight_index]) * (p.area / poly.area))
                 for poly, rec in zip(sub_units.polygons, sub_units.records) for p in multi_to_poly(poly)]
 
@@ -59,40 +97,14 @@ class ConstructWeights:
         """
         This class takes a set of shapefiles and creates a weighted json based on either the overlapping area or
         underlying population.
-
         """
-        self._working_dir = Path(validate_path(working_directory))
         self._gid = gid
         self._name_indexes = name_indexes
         self._cut_off = cut_off
 
-        # TODO: Legacy? Remove once new version works
-        self._weight_index = weight_index
-        self.sub_units = ShapeObject(f"{working_directory}/{subunits}")
-
-        setup_files = self._validate_setup(shapefile_folder, base_name, subunits, weight_index)
-        self.base, self.shapefiles, self.sub_units2 = setup_files
-
-    def _validate_setup(self, shapefile_folder: str, base_name: str, subunits: Optional[Union[str, Path]],
-                        weight_index: int) -> Tuple[ShapeObject, List[ShapeObject], Optional[List[SubPoly]]]:
-        """Validate the setup for constructing the base"""
-        # Set shapefile name path, valid it exists
-        file_path = validate_path(Path(self._working_dir, shapefile_folder))
-
-        # Check the base name exists within the shapefile folder, and there is at least one other file
-        shapefiles = sorted([file for file in directory_iterator(file_path) if Path(file_path, file).suffix == ".shp"])
-        if base_name not in shapefiles:
-            raise BaseNameNotFound(base_name, file_path)
-        if len(shapefiles) <= 1:
-            raise IndexError(f"Found {len(shapefiles)} files, but at least two files are required to weight")
-
-        # Load the shapefiles and, if required, the subunits. Then return
-        shape_files = [ShapeObject(f"{file_path}/{file}") for file in shapefiles]
-        if subunits:
-            sub_units = SetSubUnits(subunits, weight_index, self._gid, self._working_dir)()
-        else:
-            sub_units = None
-        return ShapeObject(f"{file_path}/{base_name}"), shape_files, sub_units
+        # Validate our parameters, and extract the base shapefile, other shapefiles, and sub unit shapefile if needed
+        val = PreValidateConstructWeights(working_directory, shapefile_folder, base_name, subunits, gid, weight_index)
+        self.base, self.shapefiles, self.sub_units = val()
 
     def construct_base_weights(self, write_name: str = 'BaseWeights') -> None:
         """
