@@ -178,9 +178,10 @@ class ConstructWeights:
 
             # Some rounding issues may lead to it being possible for it be slightly over 100, in which case we reset it
             # back to be equal to 100
-            overlap_values['Population'] = min(weight, 100)
+            overlap_values['Population'] = min(weight, 100.0)
+
         else:
-            overlap_values['Population'] = 100
+            overlap_values['Population'] = 100.0
         overlap_values.pop('Match', None)
         return overlap_values
 
