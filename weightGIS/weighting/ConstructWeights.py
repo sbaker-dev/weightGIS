@@ -106,7 +106,7 @@ class ConstructWeights:
         val = PreValidateConstructWeights(working_directory, shapefile_folder, base_name, subunits, gid, weight_index)
         self.base, self.shapefiles, self.sub_units = val()
 
-    def construct_base_weights(self, write_name: str = 'BaseWeights') -> None:
+    def construct_base_weights(self, write_dir: Union[str, Path], write_name: str = 'BaseWeights') -> None:
         """
         Construct the base weights for a set of shapefiles.
 
@@ -133,7 +133,7 @@ class ConstructWeights:
 
             base_weights[f"{record[self._gid]}__{self._construct_name(record)}"] = match_weights
 
-        write_json(base_weights, r"I:\Work\Shapefiles\TTT\SubProcessing", write_name)
+        write_json(base_weights, write_dir, write_name)
 
     def _polygon_area_weights(self, current_shape: Union[Polygon, MultiPolygon], match_shape_file: ShapeObject) -> dict:
         """
