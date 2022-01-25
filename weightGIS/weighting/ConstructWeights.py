@@ -172,7 +172,7 @@ class ConstructWeights:
 
         """
         if overlap_values['Area'] != 100:
-            interior_polys = self._sub_poly_weight(self.sub_units2, overlap_values['Match'])
+            interior_polys = self._sub_poly_weight(self.sub_units, overlap_values['Match'])
             base_polys = self._sub_poly_weight(interior_polys, base_shape)
             weight = (sum(i.weight for i in base_polys) / sum(i.weight for i in interior_polys) * 100)
 
@@ -185,71 +185,37 @@ class ConstructWeights:
         overlap_values.pop('Match', None)
         return overlap_values
 
-    def _sub_poly_weight(self, sub_units, main_polygon):
+    def _sub_poly_weight(self, sub_units: List[SubPoly], main_polygon: Union[Polygon, MultiPolygon]):
+        """Calculate the population weight from subunit weights"""
         interior_polys = []
-
-        # for i, poly in enumerate(multi_to_poly(main_polygon)):
-        #
-        #
-        #     write_shape_file(r"I:\Work\Shapefiles\TTT", f'ShapeCutiingTest2022_{i}', ['GID'], [poly], [[1]])
-        #
-        # print(main_polygon)
-        # sys.exit()
-
-        # TODO: I feel that we should only split each poly once (therefore not having to call multi_to_poly 15000 times
-
         for poly in multi_to_poly(main_polygon):
-            for sub_poly in sub_units:
 
-                # TODO: whilst hole punching like this makes sence, we really want to check IF it overlaps, then punch
-                #  the hole and return.
-                #   THEREFORE: Create that just makes a list of sub ploys that have the holes cut, if required, to
-                #       reduce one level of this loop recusion
+            # Isolate the valid sub polys
+            valid_subs = [sub for sub in sub_units if poly.intersection(sub.poly).area > self._cut_off]
+
+            # For each valid sub polygon
+            for sub_poly in valid_subs:
+
+                # Remove any part of the sub polygon that may be overlapping the polygons holes
                 for sub_poly_cut in self._hole_punch_sub_unit(poly, sub_poly):
 
-                    if poly.intersection(sub_poly_cut.poly).area > self._cut_off:
-                        for p in shp_split(sub_poly_cut.poly, LineString(poly.exterior)):
-                            intersection_area = poly.intersection(p).area
-                            # print(sub_poly.gid)
-                            # print(intersection_area)
-                            # print(sub_poly.poly.area)
-                            # print(sub_poly.weight * (intersection_area / sub_poly_cut.poly.area))
-                            # print("")
+                    # Split the polygon by the exterior line of the polygon
+                    for p in shp_split(sub_poly_cut.poly, LineString(poly.exterior)):
 
-                            # If this split shape is within poly
-                            if intersection_area > self._cut_off:
-                                interior_polys.append(SubPoly(sub_poly.gid, p, sub_poly.weight * (intersection_area / sub_poly.poly.area)))
+                        # If this split shape is within poly
+                        intersection_area = poly.intersection(p).area
+                        if intersection_area > self._cut_off:
+
+                            # Calculate its weight, then save this as a SubPoly to interior polygons
+                            pop_weight = sub_poly.weight * (intersection_area / sub_poly.poly.area)
+                            interior_polys.append(SubPoly(sub_poly.gid, p, pop_weight))
 
         return interior_polys
-
-        #
-        # # For each subunit
-        # for sub_poly in sub_units:
-        #     # For each poly in the main poly (cannot do hole / intersections on multi-polygons)
-        #     for poly in multi_to_poly(main_polygon):
-        #         # Check if the poly intersections with the sub poly
-        #         if poly.intersection(sub_poly.poly).area > self._cut_off:
-        #             # Split the sub poly by poly
-        #             for p in shp_split(sub_poly.poly, LineString(poly.exterior)):
-        #                 # Punch holes out of the element
-        #                 for pp in self._hole_punch_sub_unit(poly, p):
-        #                     # Calculate the intersection area
-        #                     intersection_area = poly.intersection(pp).area
-        #                     # If this split shape is within poly
-        #                     if intersection_area > self._cut_off:
-        #
-        #
-        #                         interior_polys.append(SubPoly(sub_poly.gid, pp, sub_poly.weight * (intersection_area / sub_poly.poly.area)))
-        #
-        # return interior_polys
 
     def _hole_punch_sub_unit(self, current_polygon, split_poly):
         """
         A polygon may have holes within it, so we need to punch the holes out so as to not get an inaccurate area.
         """
-        # TODO: If it doesn't overlap, just return the poly_list?
-
-
         changes_from_holes = False
         poly_list = []
         for hole in current_polygon.interiors:
