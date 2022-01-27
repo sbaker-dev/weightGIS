@@ -1,10 +1,10 @@
 from weightGIS.Errors import BaseNameNotFound, NoSubUnitWeightIndex
 
-from miscSupports import multi_to_poly, directory_iterator, validate_path, write_json
+from miscSupports import directory_iterator, validate_path, write_json
 from shapely.geometry import LineString, Polygon, MultiPolygon
+from shapeObject import ShapeObject, multi_to_poly
 from shapely.ops import split as shp_split
 from typing import List, Union, Optional
-from shapeObject import ShapeObject
 from dataclasses import dataclass
 from pathlib import Path
 import re
