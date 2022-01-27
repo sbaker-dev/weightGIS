@@ -1,11 +1,267 @@
 from miscSupports import directory_iterator, find_duplicates, chunk_list, write_json, load_json, validate_path, \
-    invert_dates, flatten, parse_as_numeric
+    invert_dates, flatten, parse_as_numeric, simplify_string, string_contains_numbers
 from csvObject import CsvObject, write_csv
+from typing import Optional, Union, List
 from multiprocessing import Process
+from dataclasses import dataclass
 from collections import Counter
 from pathlib import Path
 import numpy as np
+import sys
 import re
+
+
+@dataclass
+class Match:
+    gid: str
+    standardised: str
+    alternate: List[List[str]]
+
+    @property
+    def name(self) -> str:
+        """The standardised name entry"""
+        return f"{self.gid}__{self.standardised}__" + "__".join([alt[0] for alt in self.alternate])
+
+    def validate_alternate(self, alternate_names: List[str]) -> bool:
+        """If we need to validate alternative names, check if all the alternative names are present"""
+        check = [1 for alt_group, alt_search in zip(self.alternate, alternate_names) if alt_search in alt_group]
+        # If alternate names are valid, accept
+        if sum(check) == len(self.alternate):
+            return True
+        else:
+            return False
+
+
+@dataclass
+class Correction:
+    correction: str
+    alt_names: str
+    year: str
+    delete: str
+
+    def validate_correction(self, root, alternated_names, current_year):
+        # TODO: Need to allow for alternate names, as if we have multiple places of the same name, then we will run into
+
+        if simplify_string(self.delete) == 'true':
+            return None
+
+        # If we have no alternated names, and the year is not important or the year is greater than or equal to the
+        # current year, then we accept this correction as the valid correction
+        if (self.year == '-' or int(self.year) >= int(current_year)) and self.alt_names == '-':
+            return simplify_string(self.correction)
+
+        # However, if we have alternated names, then we only accept the correction if alternated names match
+        elif self.year == '-' or int(self.year) >= int(current_year):
+            if self.alt_names.split('__') == alternated_names:
+                return simplify_string(self.correction)
+            else:
+                return root
+
+        # Otherwise we return the root
+        # TODO: Unknown state that can result to this
+        else:
+            print(f"Found expected validation state")
+            return root
+
+
+class FormatExternal2:
+    def __init__(self, place_reference: Union[str, Path], data_name: str,
+                 correction_path: Optional[Union[Path, str]] = None, cpu_cores: int = 1, splitter: str = "__",
+                 alternate_matches: Optional[List[int]] = None, place_order: Optional[List[int]] = None):
+
+        # Set the standardised name reference from a path to its csv
+        self._reference = CsvObject(validate_path(place_reference), set_columns=True)
+
+        # The name for this particular sub set of data
+        self._data_name = data_name
+
+        # Number of cores to use for multi-core enabled methods
+        self._cpu_cores = cpu_cores
+
+        # Set delimiters for complex names
+        self._splitter = splitter
+
+        # Match lists to standardise names to, set the number of match types, -1 is from removing GID
+        self._matcher, self._reference_types = self._construct_match_list()
+        self.alternate = alternate_matches
+        self._match_types = len(self._reference_types) - 1
+
+        # If there is a correction file, validate it exists, then load it; else None.
+        self._corrections = self._set_corrections(correction_path)
+
+        self._order = self._set_ordering(place_order)
+
+    def _construct_match_list(self):
+        """
+        Take the relations provided in the place reference and construct lists of matches for each place type to match
+        names against
+        """
+        # Isolate the place types within the reference file, which represent column headers without numbers
+        reference_types = [header for header in self._reference.headers
+                           if "GID" not in header and not string_contains_numbers(header)]
+
+        match_list = {}
+        [self._match_name(match_list, place_names, reference_types) for place_names in self._reference.row_data]
+        return match_list, ["GID"] + reference_types
+
+    def _match_name(self, match_list, place_names, reference_types):
+        """For each row of standardised names, map each alternated base map to the standardised, and link
+        supporting names and gid"""
+
+        # Clean the names from place reference
+        names = [self._place_type_names(place_names, self._isolate_area_indexes(ref)) for ref in reference_types]
+
+        # The first set of isolates from reference types will be the base names
+        base_names = names[0]
+        for name in base_names:
+            # For each name in the base set, map all alternated names back to base_names[0]. Also store the GID and
+            # alternated names
+            match_list[f"{place_names[0]}__{name}"] = Match(place_names[0], base_names[0], names[1:])
+
+    def _isolate_area_indexes(self, area):
+        """Isolate the indexes associated with a given area index"""
+        return [index for index, header in enumerate(self._reference.headers) if area in header]
+
+    @staticmethod
+    def _place_type_names(place_names: str, type_indexes: List[int]) -> List[str]:
+        """
+        Isolates all the valid names from a list of place names this place type by isolating the indexes
+        """
+        return [simplify_string(place_names[i]) for i in type_indexes if place_names[i] != ""]
+
+    def _set_corrections(self, correction_path: Optional[Union[str, Path]]) -> Optional[dict]:
+        """
+        Set the correction dict for error: correction. If the name is invalid or needs removing, the delete flag will be
+        true, and it will instead be set to none.
+        """
+        # If there are no corrections return None
+        if not correction_path:
+            return None
+
+        # Otherwise, construct an error: correction / None dict, where None occurs if the name is to be deleted
+        return {simplify_string(error): Correction(correction, alt_names, year, delete)
+                for error, alt_names, correction, year, delete, _ in CsvObject(validate_path(correction_path)).row_data}
+
+    def _set_ordering(self, place_order):
+        if place_order:
+            return place_order
+        else:
+            # Otherwise set the place_map to be just an ordered list of ints of range equal to the place types
+            return [i for i in range(self._match_types)]
+
+    def standardise_names(self, data_directory: Union[str, Path], name_i: int, data_start_i: int,
+                          write_directory: Union[str, Path]):
+
+        [self._search_for_names(file, data_directory, name_i, data_start_i, write_directory)
+         for file in directory_iterator(data_directory)]
+
+    def _search_for_names(self, csv_file, data_directory, name_i, data_start_i, write_directory):
+
+        # Load the csv file
+        raw_csv = CsvObject(Path(data_directory, csv_file), set_columns=True)
+
+        # Isolate unique names and simplify them for matching
+        unique_names = sorted([simplify_string(place) for place in list(set(raw_csv[name_i]))])
+
+        # Map all the unique names to a standardised name
+        place_dict = {place: self._match_place(place, raw_csv.file_name) for place in unique_names}
+
+        # rename all locations
+        renamed = [[place_dict[simplify_string(row[name_i])]] + row[data_start_i:] for row in raw_csv.row_data]
+
+        # Remove any ambiguity
+        cleaned = self.solve_ambiguity(renamed)
+
+        # Write the file
+        write_csv(write_directory, raw_csv.file_name, ["Place"] + raw_csv.headers[data_start_i:], cleaned)
+
+        sys.exit()
+
+    def _match_place(self, place, year):
+        """
+        Names from the town level data are not linkable to districts, attempt to do so via this method.
+        """
+        # Isolate the root name and the alternate names
+        root_name, alternated_names = self._set_place_name(place)
+
+        # Correct the root_name if there are spelling mistakes, continue if this element was to be deleted.
+        root_name = self._correct_root_name(root_name, alternated_names, year)
+        if not root_name:
+            print(f"Deleted: {place}")
+            return None
+
+        # Isolate the standardised name from matches
+        return self._isolate_standardised_name(root_name, alternated_names)
+
+    def _set_place_name(self, place):
+        """Split the names on the _splitter and order them based on the original order or that provided by the user"""
+        split_place = place.split(self._splitter)
+
+        if len(self._order) != len(split_place):
+            raise Exception(f"Attempted to order {len(split_place)} place names within {place.split(self._splitter)} "
+                            f"with {len(self._order)} orderings of {self._order}")
+
+        names = np.array(split_place)[self._order].tolist()
+        return names[0], names[1:]
+
+    def _correct_root_name(self, root: str, alternated_names: str, year: str) -> str:
+        """Correct the root name if root exists in corrections"""
+        if not self._corrections:
+            return root
+        try:
+            return self._corrections[root].validate_correction(root, alternated_names, year)
+        except KeyError:
+            return root
+
+    def _isolate_standardised_name(self, root_name, alternate_names):
+
+        potential_matches = [name for name in self._matcher.keys() if root_name == name.split("__")[1]]
+
+        if len(potential_matches) == 0:
+            raise IndexError(f"Failed to find {root_name}")
+
+        if len(potential_matches) > 1 and self.alternate:
+            for place in [self._matcher[match] for match in potential_matches]:
+                if place.validate_alternate(alternate_names):
+                    return place.name
+            # TODO: Create error
+            raise Exception(f"Found the following potential matches {potential_matches} for root '{root_name}' but "
+                            f"could not uniquely identify them with {alternate_names}")
+
+        elif len(potential_matches) > 1:
+            raise Exception(f"Found the following potential matches {potential_matches} for root '{root_name}' but "
+                            "could not uniquely identify them")
+
+        else:
+            return self._matcher[potential_matches[0]].name
+
+    def solve_ambiguity(self, data: List[List[str]]):
+
+        # Isolate names and search for duplicates
+        names = [row[0] for row in data if row[0]]
+        duplicate_list = find_duplicates(names)
+
+        # Isolate any row that does not suffer from duplication as the base of the write return
+        reset_row = [row for row in data if row[0] not in duplicate_list and row[0]]
+
+        # Merge the duplicates
+        return reset_row + [self._merge_duplicates(data, duplicate) for duplicate in duplicate_list]
+
+    @staticmethod
+    def _merge_duplicates(data, duplicated) -> List[str]:
+        # Isolate the values for each duplicate name
+        sub_list = [[parse_as_numeric(rr, float) for rr in row[1:]] for row in data if duplicated == row[0]]
+
+        # Isolate unique lists, to remove duplicates
+        unique_sub_lists = [list(x) for x in set(tuple(x) for x in sub_list)]
+
+        # Warn the user that some values have been combined.
+        if len(unique_sub_lists) > 1:
+            # TODO: Setup a warning class?
+            print(f"Found non perfect duplicates for {duplicated}")
+            for dup in [row for row in data if duplicated == row[0]]:
+                print(f"\t{dup}")
+        return [duplicated] + [str(sum(i)) for i in zip(*unique_sub_lists)]
 
 
 class FormatExternal:
@@ -25,11 +281,11 @@ class FormatExternal:
         self._gid, self._did, self._cid = self.isolates
         self._match_types = len(self._matcher[0]) - 1
 
-        # If there is a correction file, validate it exists, then load it; else None.
-        if correction_path:
-            self._corrections = self._set_corrections(correction_path)
-        else:
-            self._corrections = None
+        # # If there is a correction file, validate it exists, then load it; else None.
+        # if correction_path:
+        #     self._corrections = self._set_corrections(correction_path)
+        # else:
+        #     self._corrections = None
 
         # How to break names into chunks and the column index of names in the reformatted data
         self._splitter = splitter
@@ -47,16 +303,13 @@ class FormatExternal:
         """
         Take the relations provided in the place reference and construct lists of matches for each place type to match
         names against
-
-        :return: A list of lists, where sub lists contain the gid of the place, and then sub lists of strings for each
-            place type
         """
 
-        # Isolate the place types within the reference file
+        # Isolate the place types within the reference file, which represent column headers without numbers
         reference_types = [header for header in self._reference.headers
                            if "GID" not in header and not self._has_numbers(header)]
 
-        # Set the indexes for each area
+        # Set the indexes for each area type
         type_indexes = [[index for index, header in enumerate(self._reference.headers) if area in header]
                         for area in reference_types]
 
@@ -70,7 +323,7 @@ class FormatExternal:
         return validation, ["GID"] + reference_types, isolates
 
     @staticmethod
-    def _has_numbers(string):
+    def _has_numbers(string: str) -> bool:
         """
         Check to see if the string as a digit within it
 
@@ -78,21 +331,16 @@ class FormatExternal:
         """
         return any(char.isdigit() for char in string)
 
-    def _place_type_names(self, place, indexes):
+    def _validate_line(self, place_names, type_indexes):
+
+        return [place_names[0]] + [self._place_type_names(place_names, place_type) for place_type in type_indexes]
+
+    def _place_type_names(self, place_names: str, type_indexes: List[int]) -> List[str]:
         """
-        Isolates all the valid names for this place type
-
-        :param place: The current place we want to find equivalent names for
-        :type place: str
-
-        :param indexes: A list of indexes that represents the columns to isolate for this row that are valid for this
-            place type
-        :type indexes: list
-
-        :return: A list of all the valid places for this type
-        :rtype: list
+        Isolates all the valid names from a list of place names this place type by isolating the indexes
         """
-        return [self._simplify_string(place[i]) for i in range(min(indexes), max(indexes) + 1) if place[i] != ""]
+        return [self._simplify_string(place_names[i]) for i in range(min(type_indexes), max(type_indexes) + 1)
+                if place_names[i] != ""]
 
     @staticmethod
     def _simplify_string(string_to_simplify):
@@ -145,6 +393,8 @@ class FormatExternal:
 
         return correction_list
 
+    # TODO: I think raw-name conversion is bascially just a better standardise names, we need to standardise these
+    #  methods with the aim of keeping standardise_names. HOWEVER: we need the name splitting in standardise names!
     def standardise_names(self, data_directory, write_directory):
         """
         Standardise each place name to a single name if it has multiple
@@ -171,13 +421,17 @@ class FormatExternal:
             # Standardise the name via the matcher
             rows = []
             for i, name in enumerate(data.column_data[self._name_index], 0):
+
                 reformatted = self._convert_names(name, i, data)
+                print(reformatted)
+                sys.exit()
                 if reformatted:
                     rows.append(reformatted)
 
             # Set the headers of the output file then write the file of the same name to the write_directory
             headers = self._reference_types + data.headers[1:]
             write_csv(write_directory, data.file_path.stem, headers, rows)
+            break
 
     def _convert_names(self, name, index, data):
         """
@@ -260,15 +514,21 @@ class FormatExternal:
 
         :raises IndexError: If the place names are not successfully matched.
         """
+        print("HERE")
         for row in self._matcher:
 
             # See if we can match each place type to a a group in an a given row in the matcher.
             checked_row = [True if match in match_group else False for match, match_group in zip(place_names, row[1:])]
 
+            print(place_names)
+            print(row[1:])
+
             # If all are true, isolate the first element as the standardised name.
             if all(checked_row):
                 return self._set_standardised_place(row)
 
+
+        sys.exit()
         # If we fail raise an index error
         raise IndexError(f"{place_names} was not matched. Please update your Place Reference file accordingly.")
 
@@ -303,12 +563,17 @@ class FormatExternal:
             reset_row = [row for row in data.row_data if row[0] not in duplicate_list]
 
             for dup in duplicate_list:
+                print(dup)
                 # Isolate the row names
                 row_names = data.row_data[data.column_data[0].index(dup)][:len(self._reference_types)]
+
+                print(row_names)
 
                 # Isolate the values for each duplicate name
                 sub_list = [[parse_as_numeric(rr, float) for rr in r[len(self._reference_types):]]
                             for r in data.row_data if dup == r[0]]
+
+                print(sub_list)
 
                 # Isolate unique lists, to remove duplicates
                 unique_sub_lists = [list(x) for x in set(tuple(x) for x in sub_list)]
@@ -319,6 +584,9 @@ class FormatExternal:
 
                 # Add the combined values or singular entry of duplicate values to the reset list
                 reset_row.append(row_names + [sum(i) for i in zip(*unique_sub_lists)])
+
+
+                sys.exit()
 
             write_csv(write_directory, data.file_path.stem, data.headers, reset_row)
 
@@ -594,6 +862,8 @@ class FormatExternal:
 
             write_csv(out_directory, date, headers, place_rows)
 
+            break
+
     def _create_place_dict(self, raw_csv, name_i):
         """
         Names from the town level data are not linkable to districts, attempt to do so via this method.
@@ -698,7 +968,6 @@ class FormatExternal:
 
         :raises TypeError: If a value other than yyyy, yyyymmdd, or ddmmyyyy is passed to date_type
         """
-
         unique_dates = sorted(list(set([row[date_i] for row in raw_csv.row_data])))
         if date_type == "yyyy":
             return {date: f"{date}1231" for date in unique_dates}
