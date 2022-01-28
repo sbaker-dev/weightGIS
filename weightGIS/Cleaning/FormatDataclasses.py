@@ -37,18 +37,16 @@ class Correction:
 
         # If we have no alternated names, and the year is not important or the year is greater than or equal to the
         # current year, then we accept this correction as the valid correction
-        if (self.year == '-' or int(self.year) >= int(current_year)) and self.alt_names == '-':
+        if (self.year == '-' or int(current_year) >= int(self.year)) and self.alt_names == '-':
             return simplify_string(self.correction)
 
         # However, if we have alternated names, then we only accept the correction if alternated names match
-        elif self.year == '-' or int(self.year) >= int(current_year):
+        elif self.year == '-' or int(current_year) >= int(self.year):
             if self.alt_names.split('__') == alternated_names:
                 return simplify_string(self.correction)
             else:
                 return root
 
-        # Otherwise we return the root
-        # TODO: Unknown state that can result to this
+        # If the correction is not valid, just return the root
         else:
-            print(f"Found expected validation state")
             return root
