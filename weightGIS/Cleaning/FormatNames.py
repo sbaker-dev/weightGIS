@@ -1,3 +1,5 @@
+from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives
+
 from miscSupports import find_duplicates, parse_as_numeric, simplify_string
 from csvObject import CsvObject, write_csv
 from typing import List, Optional, Union
@@ -27,6 +29,7 @@ class FormatNames:
         self._write_directory = write_directory
 
     def standardise_names(self, csv_path: Path):
+        """Standardise all names within this csv"""
 
         # Load the csv file
         raw_csv = CsvObject(csv_path, set_columns=True)
@@ -41,7 +44,7 @@ class FormatNames:
         renamed = [[place_dict[simplify_string(row[self._name_i])]] + row[self._data_i:] for row in raw_csv.row_data]
 
         # Remove any ambiguity
-        cleaned = self.solve_ambiguity(renamed)
+        cleaned = self._solve_ambiguity(renamed)
 
         # Write the file
         write_csv(self._write_directory, raw_csv.file_name, ["Place"] + raw_csv.headers[self._data_i:], cleaned)
@@ -85,29 +88,39 @@ class FormatNames:
             return root
 
     def _isolate_standardised_name(self, root_name, alternate_names):
-
+        """
+        Depending on whether we are using alternate names or otherwise, attempt to isolate a standardised name for
+        root_name
+        """
+        # Isolate all the potential names, by comparing root name to the 2nd component of name (1st is GID)
         potential_matches = [name for name in self._matcher.keys() if root_name == name.split("__")[1]]
 
+        # If we found no potential matches, then raise an index error
         if len(potential_matches) == 0:
             raise IndexError(f"Failed to find {root_name}")
 
+        # If we find at least one potential match, and have alternative names, validate the match is consistent with the
+        # expected alternative names
         if len(potential_matches) > 1 and self._alternate:
             for place in [self._matcher[match] for match in potential_matches]:
+
+                # If we find a place that successfully validates with alternate names, return that match
                 if place.validate_alternate(alternate_names):
                     return place.name
-            # TODO: Create error
-            raise Exception(f"Found the following potential matches {potential_matches} for root '{root_name}' but "
-                            f"could not uniquely identify them with {alternate_names}")
 
+            # If we fail to find a match that meets the alternative names, warn the end using by raise
+            raise AmbiguousIsolatesAlternatives(potential_matches, root_name, alternate_names)
+
+        # If we don't have alternative names, but find more than a single entry, then we have an ambitious merge, raise
         elif len(potential_matches) > 1:
-            raise Exception(f"Found the following potential matches {potential_matches} for root '{root_name}' but "
-                            "could not uniquely identify them")
+            raise AmbiguousIsolates(potential_matches, root_name)
 
+        # Otherwise we found exactly a single match, so return that match
         else:
             return self._matcher[potential_matches[0]].name
 
-    def solve_ambiguity(self, data: List[List[str]]):
-
+    def _solve_ambiguity(self, data: List[List[str]]):
+        """Remove any ambiguities rows that have occurred as a result of standardisation"""
         # Isolate names and search for duplicates
         names = [row[0] for row in data if row[0]]
         duplicate_list = find_duplicates(names)
