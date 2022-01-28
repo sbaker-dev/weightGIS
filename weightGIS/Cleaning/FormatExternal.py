@@ -17,14 +17,17 @@ class FormatExternal:
         self._splitter = splitter
         self._write_directory = write_directory
 
-    def standardise_names(self, data_directory: Union[str, Path], name_i: int, data_start_i: int) -> None:
+    def standardise_names(self, data_directory: Union[str, Path], name_i: int, data_start_i: int,
+                          process_i: int = 0) -> None:
 
         # Initialise the FormatNames class
         name_qc = FormatNames(self._splitter, self._matcher, name_i, data_start_i, self._write_directory,
                               self._data_name)
 
         # Standardise each name within the provided data directory
-        [name_qc.standardise_names(Path(data_directory, file)) for file in directory_iterator(data_directory)]
+        files = directory_iterator(data_directory)
+        file_count = len(files) - process_i
+        [name_qc.standardise(Path(data_directory, file), i, file_count) for i, file in enumerate(files[process_i:], 1)]
 
         # Write the file and log to disk
         name_qc.write()

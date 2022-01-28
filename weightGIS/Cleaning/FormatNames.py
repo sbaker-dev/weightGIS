@@ -65,7 +65,7 @@ class FormatNames:
         write_json(self.database, self._write_directory, f'Cleaned_{self._database_name}')
         self.log.write(self._database_name, self._write_directory)
 
-    def standardise_names(self, csv_path: Path):
+    def standardise(self, csv_path: Path, file_index: int, total_files: int):
         """Standardise all names within this csv"""
         # Load the csv file
         raw_csv = CsvObject(csv_path, set_columns=True)
@@ -85,7 +85,7 @@ class FormatNames:
         # Add this dates values to the database
         self.database[raw_csv.file_name] = {row[0]: {h: row[i+1] for i, h in enumerate(raw_csv.headers[self._data_i:])}
                                             for row in cleaned}
-        print(f"Process {raw_csv.file_name} at {terminal_time()}")
+        print(f"Processed {file_index} / {total_files}: {raw_csv.file_name} at {terminal_time()}")
 
     def _match_place(self, place, year):
         """
