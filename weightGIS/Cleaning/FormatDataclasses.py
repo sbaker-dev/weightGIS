@@ -1,6 +1,6 @@
 from miscSupports import simplify_string
-from typing import List
 from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
@@ -32,8 +32,6 @@ class Correction:
     delete: str
 
     def validate_correction(self, root, alternated_names, current_year):
-        # TODO: Need to allow for alternate names, as if we have multiple places of the same name, then we will run into
-
         if simplify_string(self.delete) == 'true':
             return None
 
@@ -54,4 +52,3 @@ class Correction:
         else:
             print(f"Found expected validation state")
             return root
-
