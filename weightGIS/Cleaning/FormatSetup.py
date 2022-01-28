@@ -6,7 +6,7 @@ from typing import Optional, Union, List
 from pathlib import Path
 
 
-class FormatSetup:
+class Standardise:
     def __init__(self, place_reference: Union[str, Path], correction_path: Optional[Union[Path, str]] = None,
                  alternate_matches: Optional[List[int]] = None, place_order: Optional[List[int]] = None):
 

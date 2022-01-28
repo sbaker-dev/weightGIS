@@ -1,26 +1,28 @@
-from miscSupports import write_json, load_json, terminal_time
+from weightGIS.Cleaning import Standardise
+
+from miscSupports import write_json, load_json, terminal_time, validate_path
 from typing import Union
 from pathlib import Path
 
 
 class RelationalDatabase:
-    def __init__(self, matcher: dict, data_name: str, write_directory: Union[Path, str],
-                 data_directory: Union[Path, str]):
-        self._matcher = matcher
+    def __init__(self, matcher: Standardise, data_name: str, write_directory: Union[Path, str]):
+
+        self._std = matcher
         self._data_name = data_name
         self._write_directory = write_directory
 
-        self._database = load_json(data_directory)
+        self._database = load_json(validate_path(Path(write_directory, f"Cleaned_{data_name}.txt")))
         self.reformatted_database = {}
 
-    def __call__(self, cpu_cores):
+    def __call__(self):
         """
         Create a json file for place that contains all the information across time from the standardised data
         """
 
-        for call_index, place in enumerate(self._matcher.values(), 1):
+        for call_index, place in enumerate(self._std.matcher.values(), 1):
             if call_index % 100 == 0:
-                print(f"{call_index} / {len(self._matcher.values())}")
+                print(f"{call_index} / {len(self._std.matcher.values())}")
 
             # Set the output stub for this place's json database
             place_data = {"GID": place.gid}

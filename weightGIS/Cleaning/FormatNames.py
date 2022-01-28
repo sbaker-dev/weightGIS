@@ -1,7 +1,8 @@
+from weightGIS.Cleaning import Standardise
 from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives, OrderError
 
 from miscSupports import find_duplicates, parse_as_numeric, simplify_string, write_json, terminal_time
-from typing import List, Optional, Union
+from typing import List, Union
 from csvObject import CsvObject
 from pathlib import Path
 import numpy as np
@@ -39,23 +40,20 @@ class FormatNamesLog:
 
 
 class FormatNames:
-    def __init__(self, splitter: str, order: List[int], matcher: dict, corrections: dict, name_i: int,
-                 alternate_matches: Optional[List[int]],  data_start_i: int, write_directory: Union[str, Path],
-                 database_name: str):
+    def __init__(self, splitter: str, matcher: Standardise, name_i: int, data_start_i: int,
+                 write_directory: Union[Path, str], database_name: str):
 
-        # How to split the names, the ordering of the items that have been split, and the database name
+        # Initialise the matcher
+        self._std = matcher
+
+        # How to split the names and the database name
         self._splitter = splitter
-        self._order = order
         self._database_name = database_name
-
-        # The standardisation and correction dictionaries
-        self._matcher = matcher
-        self._corrections = corrections
-        self._alternate = alternate_matches
 
         # The indexes to isolate from the files
         self._name_i = name_i
         self._data_i = data_start_i
+        self._splitter = splitter
 
         # Setup the output write directory, the logging subclass, and the database holder
         self._write_directory = write_directory
@@ -109,18 +107,18 @@ class FormatNames:
         """Split the names on the _splitter and order them based on the original order or that provided by the user"""
         split_place = place.split(self._splitter)
 
-        if len(self._order) != len(split_place):
-            raise OrderError(split_place, place, self._splitter, self._order)
+        if len(self._std.order) != len(split_place):
+            raise OrderError(split_place, place, self._splitter, self._std.order)
 
-        names = np.array(split_place)[self._order].tolist()
+        names = np.array(split_place)[self._std.order].tolist()
         return names[0], names[1:]
 
     def _correct_root_name(self, root: str, alternated_names: str, year: str) -> str:
         """Correct the root name if root exists in corrections"""
-        if not self._corrections:
+        if not self._std.corrections:
             return root
         try:
-            return self._corrections[root].validate_correction(root, alternated_names, year)
+            return self._std.corrections[root].validate_correction(root, alternated_names, year)
         except KeyError:
             return root
 
@@ -130,7 +128,7 @@ class FormatNames:
         root_name
         """
         # Isolate all the potential names, by comparing root name to the 2nd component of name (1st is GID)
-        potential_matches = [name for name in self._matcher.keys() if root_name == name.split("__")[1]]
+        potential_matches = [name for name in self._std.matcher.keys() if root_name == name.split("__")[1]]
 
         # If we found no potential matches, then raise an index error
         if len(potential_matches) == 0:
@@ -138,8 +136,8 @@ class FormatNames:
 
         # If we find at least one potential match, and have alternative names, validate the match is consistent with the
         # expected alternative names
-        if len(potential_matches) > 1 and self._alternate:
-            for place in [self._matcher[match] for match in potential_matches]:
+        if len(potential_matches) > 1 and self._std.alternate:
+            for place in [self._std.matcher[match] for match in potential_matches]:
 
                 # If we find a place that successfully validates with alternate names, return that match
                 if place.validate_alternate(alternate_names):
@@ -154,7 +152,7 @@ class FormatNames:
 
         # Otherwise we found exactly a single match, so return that match
         else:
-            return self._matcher[potential_matches[0]].name
+            return self._std.matcher[potential_matches[0]].name
 
     def _solve_ambiguity(self, data: List[List[str]], date: str):
         """Remove any ambiguities rows that have occurred as a result of standardisation"""
