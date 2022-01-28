@@ -7,18 +7,11 @@ from pathlib import Path
 
 
 class FormatSetup:
-    def __init__(self, place_reference: Union[str, Path], data_name: str,
-                 correction_path: Optional[Union[Path, str]] = None, cpu_cores: int = 1,
+    def __init__(self, place_reference: Union[str, Path], correction_path: Optional[Union[Path, str]] = None,
                  alternate_matches: Optional[List[int]] = None, place_order: Optional[List[int]] = None):
 
         # Set the standardised name reference from a path to its csv
         self._reference = CsvObject(validate_path(place_reference), set_columns=True)
-
-        # # The name for this particular sub set of data
-        # self._data_name = data_name
-        #
-        # # Number of cores to use for multi-core enabled methods
-        # self._cpu_cores = cpu_cores
 
         # Match lists to standardise names to, set the number of match types, -1 is from removing GID
         self.matcher, self._reference_types = self._construct_match_list()
