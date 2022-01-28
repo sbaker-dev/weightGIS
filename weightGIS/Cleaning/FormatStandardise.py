@@ -74,7 +74,7 @@ class Standardise:
 
         # Otherwise, construct an error: correction / None dict, where None occurs if the name is to be deleted
         return {simplify_string(error): Correction(correction, alt_names, year, delete)
-                for error, alt_names, correction, year, delete, _ in CsvObject(validate_path(correction_path)).row_data}
+                for error, alt_names, correction, year, delete, _, _ in CsvObject(correction_path).row_data}
 
     def _set_ordering(self, place_order):
         if place_order:
