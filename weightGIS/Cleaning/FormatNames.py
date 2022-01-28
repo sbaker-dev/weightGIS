@@ -72,9 +72,7 @@ class FormatNames:
         split_place = place.split(self._splitter)
 
         if len(self._order) != len(split_place):
-            raise Exception(f"Attempted to order {len(split_place)} place names within {place.split(self._splitter)} "
-                            f"with {len(self._order)} orderings of {self._order}")
-
+            raise OrderError(split_place, place, self._splitter, self._order)
         names = np.array(split_place)[self._order].tolist()
         return names[0], names[1:]
 

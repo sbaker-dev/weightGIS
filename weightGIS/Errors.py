@@ -27,3 +27,10 @@ class AmbiguousIsolates(Exception):
             f"\n\tFound the following potential matches {potential_matches} for root '{root_name}' but "
             "could not uniquely identify them"
         )
+
+
+class OrderError(Exception):
+    def __init__(self, split_place, place, splitter, order):
+        super(OrderError, self).__init__(
+            f"Attempted to order {len(split_place)} place names within {place.split(splitter)} with {len(order)} "
+            f"orderings of {order}")
