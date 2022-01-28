@@ -25,7 +25,7 @@ class FormatExternal(FormatSetup):
 
         # Initialise the FormatNames class
         name_qc = FormatNames(self._splitter, self.order, self.matcher, self.corrections, name_i, self.alternate,
-                              data_start_i, write_directory, self._log_directory)
+                              data_start_i, write_directory, self._data_name)
 
         # Standardise each name within the provided data directory
         [name_qc.standardise_names(Path(data_directory, file)) for file in directory_iterator(data_directory)]

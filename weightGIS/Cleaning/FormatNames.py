@@ -1,17 +1,15 @@
 from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives, OrderError
 
 from miscSupports import find_duplicates, parse_as_numeric, simplify_string, write_json, terminal_time
-from csvObject import CsvObject, write_csv
 from typing import List, Optional, Union
+from csvObject import CsvObject
 from pathlib import Path
 import numpy as np
-import sys
 
 
 class FormatNamesLog:
-    def __init__(self, out_directory):
+    def __init__(self):
         self.log = {"Deleted": {}, "Ambiguous": {}}
-        self.out_directory = out_directory
 
     def delete_name(self, name, date):
         """Log any deleted places"""
@@ -35,19 +33,20 @@ class FormatNamesLog:
         for dup in duplicate_data:
             print(f"\t{dup}")
 
-    def write(self):
+    def write(self, database_name, out_directory):
         """Write log to disk"""
-        write_json(self.log, self.out_directory, f"Log_{terminal_time().replace(':', '-')}")
+        write_json(self.log, out_directory, f"{database_name}_QC_Log")
 
 
 class FormatNames:
     def __init__(self, splitter: str, order: List[int], matcher: dict, corrections: dict, name_i: int,
                  alternate_matches: Optional[List[int]],  data_start_i: int, write_directory: Union[str, Path],
-                 log_directory: Union[str, Path]):
+                 database_name: str):
 
-        # How to split the names, and the ordering of the items that have been split
+        # How to split the names, the ordering of the items that have been split, and the database name
         self._splitter = splitter
         self._order = order
+        self._database_name = database_name
 
         # The standardisation and correction dictionaries
         self._matcher = matcher
@@ -58,17 +57,18 @@ class FormatNames:
         self._name_i = name_i
         self._data_i = data_start_i
 
-        # Write directory and setup logging
+        # Setup the output write directory, the logging subclass, and the database holder
         self._write_directory = write_directory
-        self.log = FormatNamesLog(log_directory)
+        self.log = FormatNamesLog()
+        self.database = {}
 
-    def write_log(self):
-        """Write the log to disk"""
-        self.log.write()
+    def write(self):
+        """Write the database and the log to disk"""
+        write_json(self.database, self._write_directory, f'Cleaned_{self._database_name}')
+        self.log.write(self._database_name, self._write_directory)
 
     def standardise_names(self, csv_path: Path):
         """Standardise all names within this csv"""
-
         # Load the csv file
         raw_csv = CsvObject(csv_path, set_columns=True)
 
@@ -84,12 +84,10 @@ class FormatNames:
         # Remove any ambiguity
         cleaned = self._solve_ambiguity(renamed, raw_csv.file_name)
 
-        # Write the file
-        write_csv(self._write_directory, raw_csv.file_name, ["Place"] + raw_csv.headers[self._data_i:], cleaned)
-
-        self.write_log()
-
-        sys.exit()
+        # Add this dates values to the database
+        self.database[raw_csv.file_name] = {row[0]: {h: row[i+1] for i, h in enumerate(raw_csv.headers[self._data_i:])}
+                                            for row in cleaned}
+        print(f"Process {raw_csv.file_name} at {terminal_time()}")
 
     def _match_place(self, place, year):
         """
