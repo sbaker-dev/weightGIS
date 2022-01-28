@@ -1,6 +1,6 @@
-from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives
+from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives, OrderError
 
-from miscSupports import find_duplicates, parse_as_numeric, simplify_string
+from miscSupports import find_duplicates, parse_as_numeric, simplify_string, write_json, terminal_time
 from csvObject import CsvObject, write_csv
 from typing import List, Optional, Union
 from pathlib import Path
@@ -8,9 +8,42 @@ import numpy as np
 import sys
 
 
+class FormatNamesLog:
+    def __init__(self, out_directory):
+        self.log = {"Deleted": {}, "Ambiguous": {}}
+        self.out_directory = out_directory
+
+    def delete_name(self, name, date):
+        """Log any deleted places"""
+        # Add date to deleted if it doesn't exist
+        if date not in self.log['Deleted']:
+            self.log['Deleted'][date] = []
+
+        self.log['Deleted'][date].append(name)
+        print(f"Deleted: {name}")
+
+    def ambiguous(self, duplicate_name, data, date):
+        """Log each duplicate that exists that has been merged"""
+        # Add date to ambiguous if it doesn't exist
+        if date not in self.log['Ambiguous']:
+            self.log['Ambiguous'][date] = {}
+
+        duplicate_data = [row for row in data if duplicate_name == row[0]]
+        self.log['Ambiguous'][date][duplicate_name] = duplicate_data
+
+        print(f"Found non perfect duplicates for {duplicate_name}")
+        for dup in duplicate_data:
+            print(f"\t{dup}")
+
+    def write(self):
+        """Write log to disk"""
+        write_json(self.log, self.out_directory, f"Log_{terminal_time().replace(':', '-')}")
+
+
 class FormatNames:
     def __init__(self, splitter: str, order: List[int], matcher: dict, corrections: dict, name_i: int,
-                 alternate_matches: Optional[List[int]],  data_start_i: int, write_directory: Union[str, Path]):
+                 alternate_matches: Optional[List[int]],  data_start_i: int, write_directory: Union[str, Path],
+                 log_directory: Union[str, Path]):
 
         # How to split the names, and the ordering of the items that have been split
         self._splitter = splitter
@@ -25,8 +58,13 @@ class FormatNames:
         self._name_i = name_i
         self._data_i = data_start_i
 
-        # Write directory
+        # Write directory and setup logging
         self._write_directory = write_directory
+        self.log = FormatNamesLog(log_directory)
+
+    def write_log(self):
+        """Write the log to disk"""
+        self.log.write()
 
     def standardise_names(self, csv_path: Path):
         """Standardise all names within this csv"""
@@ -44,10 +82,12 @@ class FormatNames:
         renamed = [[place_dict[simplify_string(row[self._name_i])]] + row[self._data_i:] for row in raw_csv.row_data]
 
         # Remove any ambiguity
-        cleaned = self._solve_ambiguity(renamed)
+        cleaned = self._solve_ambiguity(renamed, raw_csv.file_name)
 
         # Write the file
         write_csv(self._write_directory, raw_csv.file_name, ["Place"] + raw_csv.headers[self._data_i:], cleaned)
+
+        self.write_log()
 
         sys.exit()
 
@@ -61,7 +101,7 @@ class FormatNames:
         # Correct the root_name if there are spelling mistakes, continue if this element was to be deleted.
         root_name = self._correct_root_name(root_name, alternated_names, year)
         if not root_name:
-            print(f"Deleted: {place}")
+            self.log.delete_name(place, year)
             return None
 
         # Isolate the standardised name from matches
@@ -73,6 +113,7 @@ class FormatNames:
 
         if len(self._order) != len(split_place):
             raise OrderError(split_place, place, self._splitter, self._order)
+
         names = np.array(split_place)[self._order].tolist()
         return names[0], names[1:]
 
@@ -117,7 +158,7 @@ class FormatNames:
         else:
             return self._matcher[potential_matches[0]].name
 
-    def _solve_ambiguity(self, data: List[List[str]]):
+    def _solve_ambiguity(self, data: List[List[str]], date: str):
         """Remove any ambiguities rows that have occurred as a result of standardisation"""
         # Isolate names and search for duplicates
         names = [row[0] for row in data if row[0]]
@@ -127,20 +168,17 @@ class FormatNames:
         reset_row = [row for row in data if row[0] not in duplicate_list and row[0]]
 
         # Merge the duplicates
-        return reset_row + [self._merge_duplicates(data, duplicate) for duplicate in duplicate_list]
+        return reset_row + [self._merge_duplicates(data, duplicate, date) for duplicate in duplicate_list]
 
-    @staticmethod
-    def _merge_duplicates(data, duplicated) -> List[str]:
+    def _merge_duplicates(self, data, duplicated, date) -> List[str]:
+        """Merge any duplicated entries together"""
         # Isolate the values for each duplicate name
         sub_list = [[parse_as_numeric(rr, float) for rr in row[1:]] for row in data if duplicated == row[0]]
 
         # Isolate unique lists, to remove duplicates
         unique_sub_lists = [list(x) for x in set(tuple(x) for x in sub_list)]
 
-        # Warn the user that some values have been combined.
+        # Warn the user that some values have been combined, then return the merged data
         if len(unique_sub_lists) > 1:
-            # TODO: Setup a warning class?
-            print(f"Found non perfect duplicates for {duplicated}")
-            for dup in [row for row in data if duplicated == row[0]]:
-                print(f"\t{dup}")
+            self.log.ambiguous(duplicated, data, date)
         return [duplicated] + [str(sum(i)) for i in zip(*unique_sub_lists)]
