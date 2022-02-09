@@ -1,4 +1,4 @@
-from ..Cleaning import Standardise, FormatNames, RelationalDatabase
+from ..Cleaning import Standardise, FormatNames, RelationalDatabase, FormatLink
 
 from miscSupports import directory_iterator
 from typing import Optional, Union, List
@@ -31,6 +31,10 @@ class FormatExternal:
 
         # Write the file and log to disk
         name_qc.write()
+
+    def link_names(self, data_directory: Union[str, Path]):
+        """Link a cleaned file based on its unique ID to the full name and then construct the database"""
+        FormatLink(self._matcher)(data_directory, self._write_directory, self._data_name)
 
     def relational_database(self) -> None:
 
