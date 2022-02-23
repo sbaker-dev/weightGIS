@@ -1,7 +1,8 @@
+from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives, OrderError, UnexpectedQCName, \
+    UnexpectedQCDate
 from weightGIS.Cleaning import Standardise
-from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives, OrderError
 
-from miscSupports import find_duplicates, parse_as_numeric, simplify_string, write_json, terminal_time
+from miscSupports import find_duplicates, parse_as_numeric, simplify_string, write_json, terminal_time, load_yaml
 from typing import List, Union
 from csvObject import CsvObject
 from pathlib import Path
@@ -9,8 +10,20 @@ import numpy as np
 
 
 class FormatNamesLog:
-    def __init__(self):
+    def __init__(self, qc_validation: Union[Path, str]):
+
+        self._qc = load_yaml(qc_validation)
+
         self.log = {"Deleted": {}, "Ambiguous": {}}
+
+    def _validated_qc(self, name, date, qc_type):
+        """Validate the quality control measure that has been applied"""
+        if name not in self._qc:
+            raise UnexpectedQCName(name, date, qc_type)
+        elif self._qc[name]['years'] and (int(date) not in self._qc[name]['years']):
+            raise UnexpectedQCDate(name, date, qc_type)
+        else:
+            return 0
 
     def delete_name(self, name, date):
         """Log any deleted places"""
@@ -20,6 +33,9 @@ class FormatNamesLog:
 
         self.log['Deleted'][date].append(name)
         print(f"Deleted: {name}")
+
+        # Validate that this QC is expected
+        self._validated_qc(name, date, 'deletion')
 
     def ambiguous(self, duplicate_name, data, date):
         """Log each duplicate that exists that has been merged"""
@@ -34,6 +50,9 @@ class FormatNamesLog:
         for dup in duplicate_data:
             print(f"\t{dup}")
 
+        # Validate that this QC is expected
+        self._validated_qc(duplicate_name, date, 'ambiguous')
+
     def write(self, database_name, out_directory):
         """Write log to disk"""
         write_json(self.log, out_directory, f"{database_name}_QC_Log")
@@ -41,7 +60,7 @@ class FormatNamesLog:
 
 class FormatNames:
     def __init__(self, splitter: str, matcher: Standardise, name_i: int, data_start_i: int,
-                 write_directory: Union[Path, str], database_name: str):
+                 write_directory: Union[Path, str], database_name: str, qc_validation: Union[Path, str]):
 
         # Initialise the matcher
         self._std = matcher
@@ -57,7 +76,7 @@ class FormatNames:
 
         # Setup the output write directory, the logging subclass, and the database holder
         self._write_directory = write_directory
-        self.log = FormatNamesLog()
+        self.log = FormatNamesLog(qc_validation)
         self.database = {}
 
     def write(self):
@@ -132,7 +151,11 @@ class FormatNames:
 
         # If we found no potential matches, then raise an index error
         if len(potential_matches) == 0:
-            raise IndexError(f"Failed to find {root_name}")
+            # TODO: Make an exception error class
+            if len(alternate_names) > 0:
+                raise IndexError(f"Failed to find {root_name}. Alternate names: {alternate_names}")
+            else:
+                raise IndexError(f"Failed to find {root_name}")
 
         # If we find at least one potential match, and have alternative names, validate the match is consistent with the
         # expected alternative names

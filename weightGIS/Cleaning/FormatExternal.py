@@ -18,11 +18,11 @@ class FormatExternal:
         self._write_directory = write_directory
 
     def standardise_names(self, data_directory: Union[str, Path], name_i: int, data_start_i: int,
-                          process_i: int = 0) -> None:
+                          qc_validation: Union[Path, str], process_i: int = 0) -> None:
 
         # Initialise the FormatNames class
         name_qc = FormatNames(self._splitter, self._matcher, name_i, data_start_i, self._write_directory,
-                              self._data_name)
+                              self._data_name, qc_validation)
 
         # Standardise each name within the provided data directory
         files = directory_iterator(data_directory)
@@ -39,4 +39,3 @@ class FormatExternal:
     def relational_database(self) -> None:
 
         RelationalDatabase(self._matcher, self._data_name, self._write_directory)()
-

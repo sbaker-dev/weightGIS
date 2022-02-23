@@ -34,3 +34,15 @@ class OrderError(Exception):
         super(OrderError, self).__init__(
             f"Attempted to order {len(split_place)} place names within {place.split(splitter)} with {len(order)} "
             f"orderings of {order}")
+
+
+class UnexpectedQCName(Exception):
+    def __init__(self, name, date, qc_type):
+        super(UnexpectedQCName, self).__init__(
+            f"Failed to find {name} during {qc_type} QC operation for {date}")
+
+
+class UnexpectedQCDate(Exception):
+    def __init__(self, name, date, qc_type):
+        super(UnexpectedQCDate, self).__init__(
+            f"Failed to find {date} within {name} for {qc_type} QC Operation")
