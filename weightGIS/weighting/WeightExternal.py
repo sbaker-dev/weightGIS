@@ -51,7 +51,7 @@ class WeightExternal:
         write_json(self._master, write_path, write_name)
         if len(self._non_common.keys()) > 0:
             write_non_common = {key: value for key, value in self._non_common.items() if len(value) > 0}
-            write_json(write_non_common, write_path, "NonCommonDates")
+            write_json(write_non_common, write_path, f"{write_name}_NonCommonDates")
 
     def extract_data(self, place):
         """
@@ -308,7 +308,6 @@ class WeightExternal:
             # Write out this information for users so they can fix their raw data
             self._non_common[place_name][attr] = {"Places": weight_places, "Target": len(weight_places),
                                                   "Dates": {d: dates_dict[d] for d in non_common_dates}}
-            print(f"Warning: Non Common dates found for {attr} in {weight_places}")
 
         # Return common dates list
         return sorted([date for date in dates_dict if date not in non_common_dates])
