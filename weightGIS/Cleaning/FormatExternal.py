@@ -1,4 +1,5 @@
-from ..Cleaning import Standardise, FormatNames, RelationalDatabase, FormatLink
+from ..Cleaning import Standardise, FormatNames, RelationalDatabase, FormatLink, FormatCombine
+from weightGIS import WeightExternal
 
 from miscSupports import directory_iterator
 from typing import Optional, Union, List
@@ -19,7 +20,7 @@ class FormatExternal:
 
     def standardise_names(self, data_directory: Union[str, Path], name_i: int, data_start_i: int,
                           qc_validation: Union[Path, str], process_i: int = 0) -> None:
-
+        """Standardise the names of places within external data"""
         # Initialise the FormatNames class
         name_qc = FormatNames(self._splitter, self._matcher, name_i, data_start_i, self._write_directory,
                               self._data_name, qc_validation)
@@ -37,5 +38,14 @@ class FormatExternal:
         FormatLink(self._matcher)(data_directory, self._write_directory, self._data_name)
 
     def relational_database(self) -> None:
-
+        """Reformat Cleaned database of Date: Place: Attribute: Value -> Place: Attribute: Date: Value """
         RelationalDatabase(self._matcher, self._data_name, self._write_directory)()
+
+    def weight_database(self, weights_path, date_max):
+        WeightExternal(Path(self._write_directory, f"Relational_{self._data_name}.txt"), weights_path, date_max
+                       ).weight_external(self._write_directory, f"{self._data_name}_Weighted")
+
+    @staticmethod
+    def combine_data_sources(unique_id, data_start, data_directory, write_directory, date):
+        """Combine data sources into a single file if you have multiple files for the same data source and date"""
+        FormatCombine(unique_id, data_start, data_directory, write_directory, date)()
