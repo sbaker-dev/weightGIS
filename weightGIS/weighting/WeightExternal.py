@@ -3,11 +3,13 @@ from collections import Counter
 from pathlib import Path
 
 
+# TODO: Refactor this
 class WeightExternal:
     def __init__(self, external_data_path, weights_path, date_max, delimiter="__"):
 
         # Load the external data
         assert Path(external_data_path).exists(), "Path to external data is invalid"
+        print(f"Loading data...")
         self.database = load_json(external_data_path)
 
         # The delimiter to access GID and the end date for weighting
@@ -33,7 +35,9 @@ class WeightExternal:
         This will use all the places and weights from the weights by dates file, and use it to weight an external data
         source.
         """
-        for place_name in self._weights_dates:
+        for index, place_name in enumerate(self._weights_dates):
+            if index % 100 == 0:
+                print(f"Weighted {index} places up to {place_name}")
 
             # See how many changes exist for this place
             dates_of_change = [date for date in self._weights_dates[place_name].keys()]
