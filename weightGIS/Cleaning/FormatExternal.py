@@ -14,7 +14,7 @@ class FormatExternal:
         self._matcher = Standardise(place_reference, correction_path, alternate_matches, place_order)
 
         # Set delimiters for complex names, the database name, and the write_directory
-        self._data_name = data_name
+        self.data_name = data_name
         self._splitter = splitter
         self._write_directory = write_directory
 
@@ -23,7 +23,7 @@ class FormatExternal:
         """Standardise the names of places within external data"""
         # Initialise the FormatNames class
         name_qc = FormatNames(self._splitter, self._matcher, name_i, data_start_i, self._write_directory,
-                              self._data_name, qc_validation)
+                              self.data_name, qc_validation)
 
         # Standardise each name within the provided data directory
         files = directory_iterator(data_directory)
@@ -35,15 +35,15 @@ class FormatExternal:
 
     def link_names(self, data_directory: Union[str, Path]):
         """Link a cleaned file based on its unique ID to the full name and then construct the database"""
-        FormatLink(self._matcher)(data_directory, self._write_directory, self._data_name)
+        FormatLink(self._matcher)(data_directory, self._write_directory, self.data_name)
 
     def relational_database(self) -> None:
         """Reformat Cleaned database of Date: Place: Attribute: Value -> Place: Attribute: Date: Value """
-        RelationalDatabase(self._matcher, self._data_name, self._write_directory)()
+        RelationalDatabase(self._matcher, self.data_name, self._write_directory)()
 
     def weight_database(self, weights_path, date_max):
-        WeightExternal(Path(self._write_directory, f"Relational_{self._data_name}.txt"), weights_path, date_max
-                       ).weight_external(self._write_directory, f"{self._data_name}_Weighted")
+        WeightExternal(Path(self._write_directory, f"Relational_{self.data_name}.txt"), weights_path, date_max
+                       ).weight_external(self._write_directory, f"{self.data_name}_Weighted")
 
     @staticmethod
     def combine_data_sources(unique_id, data_start, data_directory, write_directory, date):
