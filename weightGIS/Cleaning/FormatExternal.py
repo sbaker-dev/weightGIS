@@ -1,4 +1,4 @@
-from ..Cleaning import Standardise, FormatNames, RelationalDatabase, FormatLink, FormatCombine
+from ..Cleaning import Standardise, FormatNames, RelationalDatabase, FormatLink, FormatCombine, FormatAsCsv
 from weightGIS import WeightExternal
 
 from miscSupports import directory_iterator
@@ -49,3 +49,7 @@ class FormatExternal:
     def combine_data_sources(unique_id, data_start, data_directory, write_directory, date):
         """Combine data sources into a single file if you have multiple files for the same data source and date"""
         FormatCombine(unique_id, data_start, data_directory, write_directory, date)()
+
+    def as_csv(self, database_name: str, output_dir: Union[Path, str], write_name: str):
+        """Format the database as a csv for statistical software or uses not used to using database structures"""
+        FormatAsCsv(Path(self._write_directory, f"{database_name}.txt"))(output_dir, write_name)

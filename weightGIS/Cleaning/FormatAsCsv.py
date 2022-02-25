@@ -19,7 +19,7 @@ class FormatAsCsv:
                     for place, p_values in zip(self.database.keys(), self.database.values())]
 
         write_csv(working_directory, write_name, ['GID', 'Place', 'Date'] + self._attrs, row_data)
-        print(f"...Finished {terminal_time()}")
+        print(f"...Finished {write_name} at {terminal_time()}")
 
     def _set_headers(self) -> List[str]:
         """Extract the unique headers that exist in all locations"""
