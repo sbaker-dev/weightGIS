@@ -23,7 +23,8 @@ class FormatAsCsv:
 
     def _set_headers(self) -> List[str]:
         """Extract the unique headers that exist in all locations"""
-        return sorted(list(set(flatten([list(v.keys()) for v in self.database.values()]))))
+        return [key for key in sorted(list(set(flatten([list(v.keys()) for v in self.database.values()]))))
+                if key != 'GID']
 
     def _set_unique_dates(self) -> List[str]:
         """Extract the unique dates"""
