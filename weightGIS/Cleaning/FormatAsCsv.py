@@ -15,8 +15,8 @@ class FormatAsCsv:
     def __call__(self, working_directory: Union[Path, str], write_name: str):
         """Reformat a database into a csv"""
         print("...Isolating")
-        row_data = [self._extract_place(place, p_values)
-                    for place, p_values in zip(self.database.keys(), self.database.values())]
+        row_data = flatten([self._extract_place(place, p_values)
+                            for place, p_values in zip(self.database.keys(), self.database.values())])
 
         write_csv(working_directory, write_name, ['GID', 'Place', 'Date'] + self._attrs, row_data)
         print(f"...Finished {write_name} at {terminal_time()}")
@@ -31,12 +31,10 @@ class FormatAsCsv:
                          for v in self.database.values()])
         return sorted(list(set(dates)))
 
-    def _extract_place(self, place: str, p_values: dict) -> List[str]:
+    def _extract_place(self, place: str, p_values: dict) -> List[List[str]]:
         """Extract the place, and the attribute values, for that place"""
-
-        return flatten([self._format_names(place, date) + [self._extract_value(attr, date, p_values)
-                                                           for attr in self._attrs]
-                        for date in self._dates])
+        return [self._format_names(place, date) + [self._extract_value(attr, date, p_values) for attr in self._attrs]
+                for date in self._dates]
 
     @staticmethod
     def _format_names(place: str, date: str) -> List[str]:
