@@ -33,9 +33,9 @@ class FormatExternal:
         # Write the file and log to disk
         name_qc.write()
 
-    def link_names(self, data_directory: Union[str, Path]):
+    def link_names(self, data_directory: Union[str, Path], corrections: Optional[Union[str, Path]] = None):
         """Link a cleaned file based on its unique ID to the full name and then construct the database"""
-        FormatLink(self._matcher)(data_directory, self._write_directory, self.data_name)
+        FormatLink(self._matcher, corrections)(data_directory, self._write_directory, self.data_name)
 
     def relational_database(self) -> None:
         """Reformat Cleaned database of Date: Place: Attribute: Value -> Place: Attribute: Date: Value """

@@ -1,15 +1,28 @@
-from miscSupports import directory_iterator, write_json, terminal_time
+from miscSupports import directory_iterator, write_json, terminal_time, load_yaml
 from csvObject import CsvObject
 from pathlib import Path
 
 
 class FormatLink:
-    def __init__(self, match_data):
+    def __init__(self, match_data, corrections):
         # Construct a GID: name matcher as in this case we already have formatted GIDs
-        self.matcher = {match.gid: match.name for match in match_data.matcher.values()}
+        self.matcher = self._construct_matcher(match_data, corrections)
 
         # Initialise the database
         self.database = {}
+
+    @staticmethod
+    def _construct_matcher(match_data, corrections):
+        """
+        Construct the match data from matcher, but allow for correction incase there are values that are in the data
+        set that need to be remapped
+        """
+        matcher = {match.gid: match.name for match in match_data.matcher.values()}
+        if corrections:
+            corrections = load_yaml(corrections)
+            for c, v in corrections.items():
+                matcher[c] = matcher[v]
+        return matcher
 
     def __call__(self, data_dir, write_dir, database_name):
         [self._run(CsvObject(Path(data_dir, file)), i) for i, file in enumerate(directory_iterator(data_dir))]
