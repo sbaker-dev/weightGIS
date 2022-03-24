@@ -1,12 +1,12 @@
-from weightGIS.Cleaning import Standardise
+from weightGIS.Cleaning import FormatStandardise
 
 from miscSupports import write_json, load_json, terminal_time, validate_path
 from typing import Union
 from pathlib import Path
 
 
-class RelationalDatabase:
-    def __init__(self, matcher: Standardise, data_name: str, write_directory: Union[Path, str]):
+class FormatRelational:
+    def __init__(self, matcher: FormatStandardise, data_name: str, write_directory: Union[Path, str]):
 
         self._std = matcher
         self._data_name = data_name

@@ -1,6 +1,6 @@
 from weightGIS.Errors import AmbiguousIsolates, AmbiguousIsolatesAlternatives, OrderError, UnexpectedQCName, \
     UnexpectedQCDate
-from weightGIS.Cleaning import Standardise
+from weightGIS.Cleaning import FormatStandardise
 
 from miscSupports import find_duplicates, parse_as_numeric, simplify_string, write_json, terminal_time, load_yaml
 from typing import List, Union
@@ -59,7 +59,7 @@ class FormatNamesLog:
 
 
 class FormatNames:
-    def __init__(self, splitter: str, matcher: Standardise, name_i: int, data_start_i: int,
+    def __init__(self, splitter: str, matcher: FormatStandardise, name_i: int, data_start_i: int,
                  write_directory: Union[Path, str], database_name: str, qc_validation: Union[Path, str]):
 
         # Initialise the matcher
