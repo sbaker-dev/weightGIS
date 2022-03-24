@@ -28,7 +28,7 @@ class FormatAsCsv:
 
     def _set_unique_dates(self) -> List[str]:
         """Extract the unique dates"""
-        dates = flatten([flatten([list(vv.keys()) for kk, vv in v.items() if kk != 'GID'])
+        dates = flatten([flatten([list(vv.keys()) for kk, vv in v.items() if kk not in ['GID', 'Place_Name']])
                          for v in self.database.values()])
         return sorted(list(set(dates)))
 
