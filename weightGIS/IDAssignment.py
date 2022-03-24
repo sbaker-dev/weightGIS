@@ -1,4 +1,5 @@
 from csvObject import CsvObject, write_csv
+from miscSupports import validate_path
 from shapeObject import ShapeObject
 from shapely.geometry import Point
 from pathlib import Path
@@ -36,7 +37,7 @@ class IDLocate:
         self.east_i = east_i
         self.north_i = north_i
         self.shape_match_index = shape_match_i
-        self.write_directory = write_directory
+        self.write_directory = validate_path(write_directory)
         self.write_name = write_name
 
     def geo_ref_locate_individuals(self, geo_lookup):
