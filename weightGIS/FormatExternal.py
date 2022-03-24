@@ -1,4 +1,6 @@
-from weightGIS.Cleaning import Standardise, FormatNames, RelationalDatabase, FormatLink, FormatCombine, FormatAsCsv
+from weightGIS.Cleaning import FormatAsCsv, FormatCombine, FormatLink, FormatNames, FormatPartitions, \
+    FormatRelational, FormatStandardise
+
 from weightGIS import WeightExternal
 
 from miscSupports import directory_iterator
@@ -9,9 +11,9 @@ from pathlib import Path
 class FormatExternal:
     def __init__(self, place_reference: Union[str, Path], data_name: str, write_directory: Union[Path, str],
                  correction_path: Optional[Union[Path, str]] = None, place_order: Optional[List[int]] = None,
-                 alternate_matches: Optional[List[int]] = None, splitter: str = "__",):
+                 alternate_matches: Optional[List[int]] = None, splitter: str = "__", ):
 
-        self._matcher = Standardise(place_reference, correction_path, alternate_matches, place_order)
+        self._matcher = FormatStandardise(place_reference, correction_path, alternate_matches, place_order)
 
         # Set delimiters for complex names, the database name, and the write_directory
         self.data_name = data_name
@@ -39,7 +41,7 @@ class FormatExternal:
 
     def relational_database(self) -> None:
         """Reformat Cleaned database of Date: Place: Attribute: Value -> Place: Attribute: Date: Value """
-        RelationalDatabase(self._matcher, self.data_name, self._write_directory)()
+        FormatRelational(self._matcher, self.data_name, self._write_directory)()
 
     def weight_database(self, weights_path, date_max):
         WeightExternal(Path(self._write_directory, f"Relational_{self.data_name}.txt"), weights_path, date_max
@@ -49,6 +51,12 @@ class FormatExternal:
     def combine_data_sources(unique_id, data_start, data_directory, write_directory, date):
         """Combine data sources into a single file if you have multiple files for the same data source and date"""
         FormatCombine(unique_id, data_start, data_directory, write_directory, date)()
+
+    @staticmethod
+    def partition(root: Union[Path, str], out: Union[Path, str], merged_list: Union[Path, str],
+                  population: Optional[Union[Path, str]], file_index: Optional[int] = None):
+        """Partition files that have multiple locations in a given row"""
+        FormatPartitions(root, out, merged_list, population, file_index)()
 
     def as_csv(self, database_name: str, output_dir: Union[Path, str], write_name: str):
         """Format the database as a csv for statistical software or uses not used to using database structures"""
