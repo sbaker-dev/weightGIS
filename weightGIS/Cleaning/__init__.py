@@ -1,4 +1,7 @@
+# Classes for use within cleaning
 from .FormatDataclasses import Match, Correction
+
+# Class for use within FormatExternal
 from .FormatStandardise import FormatStandardise
 from .FormatLink import FormatLink
 from .FormatCombine import FormatCombine
