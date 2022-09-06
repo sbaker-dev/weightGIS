@@ -45,18 +45,19 @@ class FormatPartitions:
 
     def _partition_file(self, date: str, place_values: dict):
         """Partition a given file"""
-
         # Isolate the {place names: Values} as a dict
-        place_names = {simplify_string(place.split(self.splitter)[self.name_index]): [
-            parse_as_numeric(re.sub(r"\D", "", v), int) for v in values.values()
-        ] for place, values in place_values.items()}
+        place_names = {simplify_string(place.split(self.splitter)[self.name_index]): {
+            'values': [parse_as_numeric(re.sub(r"\D", "", v), int) for v in values.values()],
+            'original': [f"{self.splitter}".join([p for p in simplify_string(place).split(self.splitter)][1:])]
+            } for place, values in place_values.items()}
 
         # Correct rows that require correction
-        corrected_rows = flatten([self._correct_rows(place_names, merge, correction, date)
+        corrected_rows = flatten([self._correct_rows(place_names[merge]['values'], merge, correction, date)
                                   for merge, correction in self.merge_list.items() if merge in place_names.keys()])
 
         # Construct the non-altered rows and add any corrected rows if required
-        rows = [[name] + row + [0, 0] for name, row in place_names.items() if name not in self.merge_list.keys()]
+        rows = [row['original'] + row['values'] + [0, 0] for name, row in place_names.items()
+                if name not in self.merge_list.keys()]
         if len(corrected_rows) > 0:
             rows = rows + corrected_rows
 
@@ -70,7 +71,7 @@ class FormatPartitions:
         else:
             return file_name[:self.file_indexer]
 
-    def _correct_rows(self, place_names, merge, correction, date):
+    def _correct_rows(self, merge_places, merge, correction, date):
         """
         Correct a row that has multiple place names within by partitioning it by population if it exists or equally
         otherwise
@@ -78,7 +79,7 @@ class FormatPartitions:
         self.merge_record[date].append(merge)
 
         # Isolate the merged rows from place_names as numpy array (for multiplication)
-        merged_rows = np.array(place_names[merge])
+        merged_rows = np.array(merge_places)
 
         # Isolate the population, or equally divided each place equally if we do not have it
         pops, total, data_class = self._construct_pops(merge, date, correction)
@@ -86,8 +87,8 @@ class FormatPartitions:
         # TODO: this might now be too specific...
         # Construct a corrected row by splitting the merged_row for each place as a percentage of the total. Note the
         # SID group and the class of partition
-        return [[c.split("_")[0]] + (merged_rows * (p / total)).tolist() + [correction['sid'], data_class]
-                for c, p in pops.items()]
+        return [[pop_name] + (merged_rows * (pop_values / total)).tolist() + [correction['sid'], data_class]
+                for pop_name, pop_values in pops.items()]
 
     def _construct_pops(self, merge: str, file_date: str, correction: dict):
         """Isolate the population if we have it, and total the population count; otherwise return None"""
