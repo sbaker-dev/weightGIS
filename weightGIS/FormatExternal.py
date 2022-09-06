@@ -52,11 +52,11 @@ class FormatExternal:
         """Combine data sources into a single file if you have multiple files for the same data source and date"""
         FormatCombine(unique_id, data_start, data_directory, write_directory, date)()
 
-    @staticmethod
-    def partition(root: Union[Path, str], out: Union[Path, str], merged_list: Union[Path, str],
-                  population: Optional[Union[Path, str]], file_index: Optional[int] = None):
+    def partition(self, out: Union[Path, str], merged_list: Union[Path, str], population: Union[Path, str],
+                  file_index: Optional[int] = None, name_index: int = 1):
         """Partition files that have multiple locations in a given row"""
-        FormatPartitions(root, out, merged_list, population, file_index)()
+        FormatPartitions(Path(self._write_directory, f'Cleaned_{self.data_name}.txt'), out, self._write_directory,
+                         merged_list, population, self._splitter, file_index, name_index)()
 
     def as_csv(self, database_name: str, output_dir: Union[Path, str], write_name: str):
         """Format the database as a csv for statistical software or uses not used to using database structures"""
