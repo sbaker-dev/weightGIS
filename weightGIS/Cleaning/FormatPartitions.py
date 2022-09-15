@@ -76,15 +76,14 @@ class FormatPartitions:
         Correct a row that has multiple place names within by partitioning it by population if it exists or equally
         otherwise
         """
-        self.merge_record[date].append(merge)
-
         # Isolate the merged rows from place_names as numpy array (for multiplication)
         merged_rows = np.array(merge_places)
 
-        # Isolate the population, or equally divided each place equally if we do not have it
+        # Isolate the population for these locations. If the resulting location has a class greater than 0, log
         pops, total, data_class = self._construct_pops(merge, date, correction)
+        if data_class > 0:
+            self.merge_record[date].append(merge)
 
-        # TODO: this might now be too specific...
         # Construct a corrected row by splitting the merged_row for each place as a percentage of the total. Note the
         # SID group and the class of partition
         return [[pop_name] + (merged_rows * (pop_values / total)).tolist() + [correction['sid'], data_class]
