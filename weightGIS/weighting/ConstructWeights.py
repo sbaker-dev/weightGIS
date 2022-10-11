@@ -30,7 +30,8 @@ class PreValidateConstructWeights:
         self._base_name = base_name
 
         # Set if we are investigating sub-units, and note the gid and weight indexes for isolation if we are
-        self._sub_units, self.gid, self.weight_index = subunits, gid, self._set_weight_index(weight_index)
+        self._sub_units, self.gid, = subunits, gid
+        self.weight_index = self._set_weight_index(weight_index)
 
     def __call__(self):
         """Validate the starting parameters of ConstructWeights"""
@@ -47,10 +48,9 @@ class PreValidateConstructWeights:
         # Return the base shapefile, the other shapefiles, and the sub-unit shapefile
         return ShapeObject(f"{self._shp_path}/{self._base_name}"), shape_files, sub_units
 
-    @staticmethod
-    def _set_weight_index(weight_index):
+    def _set_weight_index(self, weight_index):
         """If a weight index has not be declared raise an exception"""
-        if not weight_index:
+        if not weight_index and self._sub_units:
             raise NoSubUnitWeightIndex()
         return weight_index
 
@@ -205,7 +205,6 @@ class ConstructWeights:
                         # If this split shape is within poly
                         intersection_area = poly.intersection(p).area
                         if intersection_area > self._cut_off:
-
                             # Calculate its weight, then save this as a SubPoly to interior polygons
                             pop_weight = sub_poly.weight * (intersection_area / sub_poly.poly.area)
                             interior_polys.append(SubPoly(sub_poly.gid, p, pop_weight))
