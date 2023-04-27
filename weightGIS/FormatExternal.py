@@ -21,11 +21,11 @@ class FormatExternal:
         self._write_directory = write_directory
 
     def standardise_names(self, data_directory: Union[str, Path], name_i: int, data_start_i: int,
-                          qc_validation: Union[Path, str], process_i: int = 0) -> None:
+                          qc_validation: Union[Path, str], process_i: int = 0, merge_ambiguity=True) -> None:
         """Standardise the names of places within external data"""
         # Initialise the FormatNames class
         name_qc = FormatNames(self._splitter, self._matcher, name_i, data_start_i, self._write_directory,
-                              self.data_name, qc_validation)
+                              self.data_name, qc_validation, merge_ambiguity)
 
         # Standardise each name within the provided data directory
         files = directory_iterator(data_directory)

@@ -60,7 +60,8 @@ class FormatNamesLog:
 
 class FormatNames:
     def __init__(self, splitter: str, matcher: FormatStandardise, name_i: int, data_start_i: int,
-                 write_directory: Union[Path, str], database_name: str, qc_validation: Union[Path, str]):
+                 write_directory: Union[Path, str], database_name: str, qc_validation: Union[Path, str],
+                 merge_ambiguity: bool):
 
         # Initialise the matcher
         self._std = matcher
@@ -73,6 +74,7 @@ class FormatNames:
         self._name_i = name_i
         self._data_i = data_start_i
         self._splitter = splitter
+        self._merge_ambiguity = merge_ambiguity
 
         # Setup the output write directory, the logging subclass, and the database holder
         self._write_directory = write_directory
@@ -96,10 +98,11 @@ class FormatNames:
         place_dict = {place: self._match_place(place, raw_csv.file_name) for place in unique_names}
 
         # rename all locations
-        renamed = [[place_dict[simplify_string(row[self._name_i])]] + row[self._data_i:] for row in raw_csv.row_data]
+        cleaned = [[place_dict[simplify_string(row[self._name_i])]] + row[self._data_i:] for row in raw_csv.row_data]
 
-        # Remove any ambiguity
-        cleaned = self._solve_ambiguity(renamed, raw_csv.file_name)
+        # Remove any ambiguity if required
+        if self._merge_ambiguity:
+            cleaned = self._solve_ambiguity(cleaned, raw_csv.file_name)
 
         # Add this dates values to the database
         self.database[raw_csv.file_name] = {row[0]: {h: row[i+1] for i, h in enumerate(raw_csv.headers[self._data_i:])}
